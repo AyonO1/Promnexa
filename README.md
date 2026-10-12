@@ -8,14 +8,33 @@ Inspired by the design craftsmanship of **Linear**, **Raycast**, and **Arc**, Pr
 
 ---
 
+## ⚡ Install in Under 30 Seconds (No Coding Required!)
+
+You don't need Node.js, git, or coding experience to use Promnexa!
+
+1. Download the pre-built extension from [**GitHub Releases**](https://github.com/AyonO1/Promnexa/releases/latest) (e.g. `promnexa-1.0.0-chrome.zip`).
+2. Extract the ZIP file.
+3. Open `chrome://extensions/` in Chrome, Brave, Edge, or Arc.
+4. Turn on **Developer mode** (top-right) and click **"Load unpacked"**.
+5. Select the extracted folder — **Done!**
+
+👉 **For detailed instructions and screenshots across all browsers, see the [Installation Guide (INSTALL.md)](INSTALL.md).**
+
+---
+
 ## 🌟 Key Highlights
 
-- **Dual Optimization Engines:** 100% offline local rule-based engine + optional AI-powered enhancement (OpenAI, Claude, Gemini).
-- **4 Optimization Modes:** Quick, Deep, Expert, and Beginner.
+- **Seamless In-Page Assistant:** A floating Promnexa button appears right inside ChatGPT, Claude, Gemini, DeepSeek, and Copilot. Type your basic idea and click **"✨ Insert into Chat"** to enhance and paste the prompt in one click!
+- **Dual Optimization Engines:** 100% offline local rule-based engine (zero network calls, zero tracking) + optional AI-powered enhancement (OpenAI, Claude, Gemini).
+- **4 Optimization Modes:**
+  - ⚡ **Quick:** Sharp, concise, unambiguous instructions.
+  - 🔍 **Deep:** Detailed structure with role context, clear objectives, constraints, and output formats.
+  - 🎓 **Expert:** High-level domain standards, edge cases, and technical rigor.
+  - 🐣 **Beginner:** Step-by-step guidance, intuitive analogies, and accessible explanations.
 - **200+ Curated Prompt Templates:** Across 8 categories (Education, Coding, Learning, Productivity, Writing, Research, Business, General).
-- **Browser Integrations:** Floating AI composer action button, right-click context menu, and keyboard shortcut (`Ctrl+Shift+P`).
-- **Design System:** Custom dark & light themes, Bengali & English bilingual support, smooth micro-interactions.
-- **Privacy First:** All data saved locally in your browser; zero telemetry, zero analytics.
+- **Clipboard & Quick Actions:** 1-click **Paste** from clipboard, plus direct **"Open in ChatGPT"** and **"Open in Claude"** shortcuts.
+- **Bilingual Design System:** Custom dark & light themes, Bengali & English support, smooth micro-interactions.
+- **Privacy First:** 100% local browser storage; zero telemetry, zero analytics.
 
 ---
 
@@ -23,53 +42,58 @@ Inspired by the design craftsmanship of **Linear**, **Raycast**, and **Arc**, Pr
 
 ```
 Promnexa/
-├── .vscode/                     # Workspace configurations
-├── .gitignore                   # Root Git ignore rules
-├── README.md                    # Root repository documentation
-└── promnexa-ext/                # Browser extension source code
-    ├── entrypoints/             # Background scripts, content scripts, and React popup
-    ├── lib/                     # Optimization engine, AI provider, storage & templates
-    ├── public/                  # Extension icons & assets
-    ├── scripts/                 # Utility scripts & prompt dataset curation
-    ├── tests/                   # Automated test suite
-    ├── PRIVACY.md               # Privacy policy
-    ├── STORE_SUBMISSION.md      # Web Store submission metadata & checklist
-    ├── SAFARI_PACKAGING.md      # Safari extension build guide
-    ├── TESTING_REPORT.md        # Comprehensive quality & test audit
-    ├── package.json             # Dependencies and scripts
-    └── wxt.config.ts            # WXT configuration
+├── .github/workflows/          # Automated CI/CD & release pipeline
+├── .vscode/                    # Workspace configurations
+├── .gitignore                  # Git ignore rules
+├── build.bat                   # 1-Click Windows builder script
+├── start-dev.bat               # 1-Click Windows dev launcher
+├── package.json                # Root workspace scripts
+├── INSTALL.md                  # Beginner-friendly 30-second install guide
+├── README.md                   # Main repository overview
+└── promnexa-ext/               # Browser extension source code
+    ├── entrypoints/
+    │   ├── background.ts       # Context menu handler & message broker
+    │   ├── content.ts          # Floating in-page assistant & chat adapters
+    │   └── popup/              # React extension popup
+    ├── lib/                    # Optimization engine, AI provider, storage & templates
+    ├── public/                 # Extension icons & assets
+    ├── scripts/                # Dataset curation & icon generator scripts
+    ├── tests/                  # Automated test suite (25 unit tests)
+    ├── PRIVACY.md              # Privacy policy
+    ├── STORE_SUBMISSION.md     # Web Store submission checklist
+    ├── SAFARI_PACKAGING.md     # Safari packaging instructions
+    └── wxt.config.ts           # WXT configuration
 ```
 
 ---
 
-## 🚀 Quick Start
+## 💻 Developer Quick Start
 
-To develop or build the extension:
+Run scripts directly from the root workspace:
 
 ```bash
-# Navigate to the extension directory
-cd promnexa-ext
-
 # Install dependencies
-npm install
+npm install --prefix promnexa-ext
 
-# Start development server
+# Start development server with hot-reload
 npm run dev
 
-# Build for Chrome / Chromium (Manifest V3)
-npm run build
-
-# Build for Firefox (Manifest V2)
-npm run build:firefox
-
-# Run tests
+# Run automated tests
 npm test
+
+# Build production extensions
+npm run build         # Chrome MV3
+npm run build:firefox # Firefox MV2
+npm run build:all     # Build both
+
+# Package distribution ZIPs
+npm run zip:all
 ```
 
-For more detailed setup guides and distribution instructions, see [`promnexa-ext/README.md`](promnexa-ext/README.md).
+On Windows, you can also double-click [`build.bat`](build.bat) or [`start-dev.bat`](start-dev.bat).
 
 ---
 
 ## 📄 License
 
-MIT License.
+MIT License. Curated public prompts derived from Awesome ChatGPT Prompts (CC0 1.0 Universal).

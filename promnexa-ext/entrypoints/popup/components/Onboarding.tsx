@@ -1,6 +1,6 @@
 import React from 'react';
 import { Logo } from './Logo';
-import { Sparkles, Zap, BookOpen, ArrowRight } from 'lucide-react';
+import { Sparkles, BookOpen, ArrowRight, ShieldCheck, MessageSquare } from 'lucide-react';
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -10,17 +10,22 @@ const STEPS = [
   {
     icon: <Sparkles />,
     title: 'Welcome to Promnexa',
-    description: 'Turn your ideas into powerful, well-structured AI prompts. No prompt engineering expertise required.',
+    description: 'Turn your ideas into powerful, well-structured AI prompts for ChatGPT, Claude, Gemini, DeepSeek, and more.',
   },
   {
-    icon: <Zap />,
-    title: 'Smart Optimization',
-    description: 'Just type what you need. Promnexa automatically detects the category and optimizes your prompt for the best results.',
+    icon: <MessageSquare />,
+    title: 'In-Page AI Assistant',
+    description: 'A floating magic button appears on ChatGPT, Claude & Gemini. Click it to optimize and insert prompts directly into chat!',
   },
   {
     icon: <BookOpen />,
-    title: 'Prompt Library',
-    description: 'Browse 30+ curated templates for education, coding, learning, daily life, and more. Save your favorites for quick access.',
+    title: '200+ Curated Templates',
+    description: 'Explore 200+ templates for coding, education, writing, research, and business. Save your favorites for instant access.',
+  },
+  {
+    icon: <ShieldCheck />,
+    title: '100% Private & Shortcut Ready',
+    description: 'Works offline with zero tracking. Press Ctrl+Shift+P (or Cmd+Shift+P on Mac) anytime to open Promnexa.',
   },
 ];
 

@@ -1,0 +1,74 @@
+name: Build and Release Promnexa
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Test & Build Extensions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'promnexa-ext/package-lock.json'
+
+      - name: Install Dependencies
+        run: |
+          cd promnexa-ext
+          npm ci
+
+      - name: Run Automated Test Suite
+        run: |
+          cd promnexa-ext
+          npm test
+
+      - name: Build Chrome & Firefox Extensions
+        run: |
+          cd promnexa-ext
+          npm run build
+          npm run build:firefox
+
+      - name: Package Distribution ZIPs
+        run: |
+          cd promnexa-ext
+          npm run zip
+          npm run zip:firefox
+
+      - name: Upload Chrome Extension Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: promnexa-chrome-mv3
+          path: promnexa-ext/.output/promnexa-*-chrome.zip
+
+      - name: Upload Firefox Extension Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: promnexa-firefox-mv2
+          path: promnexa-ext/.output/promnexa-*-firefox.zip
+
+      - name: Publish GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            promnexa-ext/.output/promnexa-*-chrome.zip
+            promnexa-ext/.output/promnexa-*-firefox.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true

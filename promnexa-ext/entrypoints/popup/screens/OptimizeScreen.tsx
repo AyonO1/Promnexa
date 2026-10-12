@@ -7,7 +7,7 @@ import { getT, type Language } from '../../../lib/i18n';
 import {
   Sparkles, X, Copy, Check, Heart, RotateCcw,
   Zap, GraduationCap,
-  BookOpen, Code2, Lightbulb, Calendar, Edit3, ArrowRight, Bot, Cpu
+  BookOpen, Code2, Lightbulb, Calendar, Edit3, ArrowRight, Bot, Cpu, Clipboard, ExternalLink
 } from 'lucide-react';
 
 interface OptimizeScreenProps {
@@ -256,6 +256,35 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
     executeOptimization(updated, category, mode);
   };
 
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text && text.trim()) {
+        const trimmed = text.trim();
+        setInput(trimmed);
+        const detected = detectCategory(trimmed);
+        if (detected !== 'general') setCategory(detected);
+        textareaRef.current?.focus();
+        addToast('Pasted from clipboard', 'info');
+      } else {
+        addToast('Clipboard is empty', 'info');
+      }
+    } catch {
+      addToast('Please allow clipboard access to paste', 'error');
+    }
+  };
+
+  const handleOpenInAI = async (url: string, platformName: string) => {
+    if (!result) return;
+    try {
+      await copyToClipboard(result.optimized);
+      window.open(url, '_blank');
+      addToast(`Copied! Opening ${platformName}...`, 'success');
+    } catch {
+      window.open(url, '_blank');
+    }
+  };
+
   const categories: Category[] = ['general', 'education', 'coding', 'learning', 'daily', 'writing', 'research', 'business'];
 
   return (
@@ -307,11 +336,18 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
           <span className={`char-count ${input.length > 4000 ? 'char-count--warning' : ''}`}>
             {input.length} {t.characters}
           </span>
-          {input && (
-            <button className="clear-btn" onClick={handleClear}>
-              <X /> {t.clear}
-            </button>
-          )}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {!input && (
+              <button className="clear-btn" onClick={handlePaste} title="Paste from clipboard">
+                <Clipboard style={{ width: '12px', height: '12px' }} /> {t.paste}
+              </button>
+            )}
+            {input && (
+              <button className="clear-btn" onClick={handleClear}>
+                <X /> {t.clear}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -447,6 +483,20 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
                   title="Add concrete examples requirement"
                 >
                   💡 {t.addExamples}
+                </button>
+                <button
+                  className="chip"
+                  onClick={() => handleOpenInAI('https://chatgpt.com', 'ChatGPT')}
+                  title="Copy prompt and open ChatGPT in new tab"
+                >
+                  <ExternalLink style={{ width: '11px', height: '11px' }} /> {t.openChatGPT}
+                </button>
+                <button
+                  className="chip"
+                  onClick={() => handleOpenInAI('https://claude.ai', 'Claude')}
+                  title="Copy prompt and open Claude in new tab"
+                >
+                  <ExternalLink style={{ width: '11px', height: '11px' }} /> {t.openClaude}
                 </button>
               </div>
             )}
