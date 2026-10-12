@@ -1,0 +1,21 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="128" height="128" rx="28" fill="#1B1D24"/>
+  
+  <!-- Outer hexagonal glow -->
+  <path d="M64 18L108.5 43.5V94.5L64 120L19.5 94.5V43.5L64 18Z" fill="url(#iconGrad)" opacity="0.12"/>
+  
+  <!-- Inner transformation symbol -->
+  <path d="M42 84L54 52H74L86 84" stroke="url(#iconGrad)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M48 72H80" stroke="url(#iconGrad)" stroke-width="7" stroke-linecap="round"/>
+  
+  <!-- Clarity spark -->
+  <circle cx="64" cy="38" r="5" fill="url(#iconGrad)"/>
+  
+  <defs>
+    <linearGradient id="iconGrad" x1="20" y1="20" x2="108" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#817CF5"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+  </defs>
+</svg>

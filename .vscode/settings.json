@@ -1,0 +1,4 @@
+{
+  "typescript.tsdk": "promnexa-ext/node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true
+}

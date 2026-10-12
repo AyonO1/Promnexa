@@ -1,0 +1,470 @@
+import React from 'react';
+import type { Category, OptimizationMode, OptimizationResult, ComparisonView, AIProviderConfig } from '../../../lib/types';
+import { optimizePrompt, detectCategory, CATEGORY_INFO, generateId, copyToClipboard } from '../../../lib/optimizer';
+import { optimizeWithAI } from '../../../lib/ai-provider';
+import { savePrompt, addToHistory } from '../../../lib/storage';
+import { getT, type Language } from '../../../lib/i18n';
+import {
+  Sparkles, X, Copy, Check, Heart, RotateCcw,
+  Zap, GraduationCap,
+  BookOpen, Code2, Lightbulb, Calendar, Edit3, ArrowRight, Bot, Cpu
+} from 'lucide-react';
+
+interface OptimizeScreenProps {
+  addToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  defaultCategory: Category;
+  defaultMode: OptimizationMode;
+  aiProvider?: AIProviderConfig | null;
+  language?: Language;
+  initialInput?: string;
+  initialCategory?: Category;
+  onClearInitial?: () => void;
+}
+
+const CATEGORY_ICONS: Record<Category, React.ReactNode> = {
+  education: <GraduationCap />,
+  coding: <Code2 />,
+  learning: <Lightbulb />,
+  daily: <Calendar />,
+  writing: <BookOpen />,
+  research: <BookOpen />,
+  business: <BookOpen />,
+  general: <Sparkles />,
+};
+
+const MODES: { key: OptimizationMode; labelKey: 'quick' | 'deep' | 'expert' | 'beginner' }[] = [
+  { key: 'quick', labelKey: 'quick' },
+  { key: 'deep', labelKey: 'deep' },
+  { key: 'expert', labelKey: 'expert' },
+  { key: 'beginner', labelKey: 'beginner' },
+];
+
+const EXAMPLE_PROMPTS = [
+  'Teach me machine learning',
+  'Fix my React code',
+  'Write a professional email to my boss',
+  'Plan a 5-day trip to Japan',
+  'Create a study guide for calculus',
+  'Help me prepare for a coding interview',
+];
+
+export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
+  addToast,
+  defaultCategory,
+  defaultMode,
+  aiProvider,
+  language = 'en',
+  initialInput,
+  initialCategory,
+  onClearInitial,
+}) => {
+  const t = getT(language);
+  const hasAiConfig = Boolean(aiProvider && aiProvider.apiKey && aiProvider.apiKey.trim().length > 0);
+
+  const [input, setInput] = React.useState(initialInput || '');
+  const [category, setCategory] = React.useState<Category>(initialCategory || defaultCategory);
+  const [mode, setMode] = React.useState<OptimizationMode>(defaultMode);
+  const [engine, setEngine] = React.useState<'local' | 'ai'>(hasAiConfig ? 'ai' : 'local');
+  const [result, setResult] = React.useState<OptimizationResult | null>(null);
+  const [isOptimizing, setIsOptimizing] = React.useState(false);
+  const [comparisonView, setComparisonView] = React.useState<ComparisonView>('optimized');
+  const [copied, setCopied] = React.useState(false);
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  // If initial input changed from props, update input
+  React.useEffect(() => {
+    if (initialInput) {
+      setInput(initialInput);
+      if (initialCategory) setCategory(initialCategory);
+      if (onClearInitial) onClearInitial();
+    }
+  }, [initialInput, initialCategory, onClearInitial]);
+
+  // Read context action from storage on mount (from context menu or floating button)
+  React.useEffect(() => {
+    const checkContextAction = async () => {
+      try {
+        if (typeof browser !== 'undefined' && browser.storage?.local) {
+          const res = (await browser.storage.local.get('promnexa_context_action')) as Record<string, any>;
+          const data = res.promnexa_context_action as { action?: string; text?: string } | undefined;
+          if (data && data.text) {
+            const rawText = data.text;
+            setInput(rawText);
+            let targetCategory: Category = defaultCategory;
+            let targetMode: OptimizationMode = defaultMode;
+
+            if (data.action === 'explain') {
+              targetCategory = 'learning';
+              targetMode = 'deep';
+            } else if (data.action === 'summarize') {
+              targetCategory = 'general';
+              targetMode = 'quick';
+            } else if (data.action === 'create-prompt') {
+              targetCategory = 'general';
+              targetMode = 'expert';
+            } else {
+              const detected = detectCategory(rawText);
+              if (detected !== 'general') targetCategory = detected;
+            }
+
+            setCategory(targetCategory);
+            setMode(targetMode);
+
+            // Clean up context action so it doesn't run again
+            await browser.storage.local.remove('promnexa_context_action');
+
+            // Run optimization
+            executeOptimization(rawText, targetCategory, targetMode);
+          }
+        }
+      } catch (err) {
+        console.error('Error checking context action:', err);
+      }
+    };
+
+    checkContextAction();
+  }, []);
+
+  // Auto-detect category as user types
+  React.useEffect(() => {
+    if (input.length > 10) {
+      const detected = detectCategory(input);
+      if (detected !== 'general') {
+        setCategory(detected);
+      }
+    }
+  }, [input]);
+
+  const executeOptimization = async (
+    textToOptimize: string,
+    cat: Category,
+    m: OptimizationMode,
+    preferredEngine?: 'local' | 'ai'
+  ) => {
+    if (!textToOptimize.trim()) {
+      addToast('Please enter a prompt to optimize', 'error');
+      return;
+    }
+
+    setIsOptimizing(true);
+    const activeEngine = preferredEngine || engine;
+
+    try {
+      let optResult: OptimizationResult;
+
+      if (activeEngine === 'ai' && aiProvider?.apiKey) {
+        try {
+          optResult = await optimizeWithAI(textToOptimize, cat, m, aiProvider);
+        } catch (aiErr: any) {
+          console.warn('AI optimization failed, falling back to local engine:', aiErr);
+          addToast(`AI Error: ${aiErr.message || 'Request failed'}. Using local engine.`, 'info');
+          optResult = optimizePrompt(textToOptimize, cat, m);
+        }
+      } else {
+        // Local engine
+        await new Promise(resolve => setTimeout(resolve, 300));
+        optResult = optimizePrompt(textToOptimize, cat, m);
+      }
+
+      setResult(optResult);
+      setComparisonView('optimized');
+
+      // Save to history
+      try {
+        await addToHistory({
+          id: generateId(),
+          original: textToOptimize,
+          optimized: optResult.optimized,
+          category: cat,
+          mode: m,
+          isFavorite: false,
+          createdAt: Date.now(),
+        });
+      } catch {
+        // Silently fail for history
+      }
+    } catch (err: any) {
+      addToast(err.message || 'Optimization failed', 'error');
+    } finally {
+      setIsOptimizing(false);
+    }
+  };
+
+  const handleOptimize = () => {
+    executeOptimization(input, category, mode);
+  };
+
+  const handleCopy = async () => {
+    if (!result) return;
+    try {
+      await copyToClipboard(result.optimized);
+      setCopied(true);
+      addToast(t.copied, 'success');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      addToast('Failed to copy', 'error');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!result) return;
+    try {
+      await savePrompt({
+        id: generateId(),
+        original: result.original,
+        optimized: result.optimized,
+        category: result.category,
+        mode: result.mode,
+        isFavorite: true,
+        createdAt: Date.now(),
+      });
+      addToast(t.saved, 'success');
+    } catch {
+      addToast('Failed to save', 'error');
+    }
+  };
+
+  const handleClear = () => {
+    setInput('');
+    setResult(null);
+    textareaRef.current?.focus();
+  };
+
+  const handleExampleClick = (example: string) => {
+    setInput(example);
+    const detected = detectCategory(example);
+    if (detected !== 'general') setCategory(detected);
+    textareaRef.current?.focus();
+  };
+
+  const handleEditInInput = () => {
+    if (!result) return;
+    setInput(result.optimized);
+    setResult(null);
+    textareaRef.current?.focus();
+    addToast('Prompt loaded into editor', 'info');
+  };
+
+  const handleQuickRefine = (newMode: OptimizationMode) => {
+    setMode(newMode);
+    executeOptimization(input, category, newMode);
+  };
+
+  const handleAddExamples = () => {
+    const updated = input.trim() + '\n\nPlease include 2-3 realistic, step-by-step examples.';
+    setInput(updated);
+    executeOptimization(updated, category, mode);
+  };
+
+  const categories: Category[] = ['general', 'education', 'coding', 'learning', 'daily', 'writing', 'research', 'business'];
+
+  return (
+    <div className="screen-enter">
+      {/* Section heading & Engine indicator */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+        <div>
+          <h1 className="section-title">{t.optimizeTitle}</h1>
+          <p className="section-subtitle">{t.optimizeSubtitle}</p>
+        </div>
+
+        {hasAiConfig ? (
+          <button
+            className={`chip ${engine === 'ai' ? 'chip--active' : ''}`}
+            onClick={() => setEngine(engine === 'ai' ? 'local' : 'ai')}
+            title={`Switch to ${engine === 'ai' ? 'Local Engine' : 'AI Mode'}`}
+            style={{ flexShrink: 0, marginTop: '2px' }}
+          >
+            {engine === 'ai' ? <Bot style={{ width: '12px', height: '12px' }} /> : <Cpu style={{ width: '12px', height: '12px' }} />}
+            {engine === 'ai' ? `${aiProvider?.provider}` : 'Local'}
+          </button>
+        ) : (
+          <span
+            className="tag"
+            title="Local offline engine active. Add API key in Settings to enable AI models."
+            style={{ flexShrink: 0, marginTop: '4px' }}
+          >
+            ⚡ Local
+          </span>
+        )}
+      </div>
+
+      {/* Input area */}
+      <div className="textarea-wrapper">
+        <textarea
+          ref={textareaRef}
+          className="textarea"
+          placeholder={t.placeholder}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              handleOptimize();
+            }
+          }}
+          rows={4}
+        />
+        <div className="textarea-footer">
+          <span className={`char-count ${input.length > 4000 ? 'char-count--warning' : ''}`}>
+            {input.length} {t.characters}
+          </span>
+          {input && (
+            <button className="clear-btn" onClick={handleClear}>
+              <X /> {t.clear}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Example prompts when empty */}
+      {!input && !result && (
+        <div style={{ marginTop: 'var(--space-3)' }}>
+          <span className="category-label">{t.tryExample}</span>
+          <div className="chips-container" style={{ marginTop: '6px' }}>
+            {EXAMPLE_PROMPTS.slice(0, 3).map((example) => (
+              <button
+                key={example}
+                className="chip"
+                onClick={() => handleExampleClick(example)}
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Category selector */}
+      <div className="category-row">
+        <span className="category-label">{t.category}</span>
+        <div className="chips-container">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              className={`chip ${category === cat ? 'chip--active' : ''}`}
+              onClick={() => setCategory(cat)}
+              title={CATEGORY_INFO[cat].description}
+            >
+              {CATEGORY_INFO[cat].emoji} {CATEGORY_INFO[cat].label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Mode selector */}
+      <div className="mode-selector">
+        {MODES.map((m) => (
+          <button
+            key={m.key}
+            className={`mode-btn ${mode === m.key ? 'mode-btn--active' : ''}`}
+            onClick={() => setMode(m.key)}
+          >
+            {t[m.labelKey]}
+          </button>
+        ))}
+      </div>
+
+      {/* Optimize button */}
+      <button
+        className={`btn-primary ${isOptimizing ? 'btn-primary--loading' : ''}`}
+        onClick={handleOptimize}
+        disabled={!input.trim() || isOptimizing}
+      >
+        {isOptimizing ? (
+          <>
+            <span className="spinner" /> {t.optimizing}
+          </>
+        ) : (
+          <>
+            <Sparkles /> {t.optimizeBtn}
+          </>
+        )}
+      </button>
+
+      {/* Result Card */}
+      {result && (
+        <div className="result-card">
+          <div className="result-card__header">
+            <div className="result-card__title">
+              <Sparkles /> {t.optimizedPrompt}
+            </div>
+            <div className="result-card__actions">
+              <button className="icon-btn" onClick={handleCopy} title="Copy">
+                {copied ? <Check /> : <Copy />}
+              </button>
+              <button className="icon-btn" onClick={handleSave} title="Save to favorites">
+                <Heart />
+              </button>
+              <button className="icon-btn" onClick={handleEditInInput} title={t.editPrompt}>
+                <Edit3 />
+              </button>
+              <button className="icon-btn" onClick={handleOptimize} title="Regenerate">
+                <RotateCcw />
+              </button>
+            </div>
+          </div>
+
+          <div className="result-card__body">
+            {/* Comparison tabs */}
+            <div className="comparison-tabs">
+              <button
+                className={`comparison-tab ${comparisonView === 'optimized' ? 'comparison-tab--active' : ''}`}
+                onClick={() => setComparisonView('optimized')}
+              >
+                {t.optimized}
+              </button>
+              <button
+                className={`comparison-tab ${comparisonView === 'original' ? 'comparison-tab--active' : ''}`}
+                onClick={() => setComparisonView('original')}
+              >
+                {t.original}
+              </button>
+            </div>
+
+            <div className="result-text">
+              {comparisonView === 'optimized' ? result.optimized : result.original}
+            </div>
+
+            {/* Quick refinement actions */}
+            {comparisonView === 'optimized' && (
+              <div style={{ marginTop: 'var(--space-3)', display: 'flex', gap: 'var(--space-1)', flexWrap: 'wrap' }}>
+                <button
+                  className="chip"
+                  onClick={() => handleQuickRefine('quick')}
+                  title="Rewrite as a concise prompt"
+                >
+                  ⚡ {t.makeConcise}
+                </button>
+                <button
+                  className="chip"
+                  onClick={() => handleQuickRefine('deep')}
+                  title="Rewrite with comprehensive structure"
+                >
+                  🔍 {t.makeDetailed}
+                </button>
+                <button
+                  className="chip"
+                  onClick={handleAddExamples}
+                  title="Add concrete examples requirement"
+                >
+                  💡 {t.addExamples}
+                </button>
+              </div>
+            )}
+
+            {/* Improvements list */}
+            {comparisonView === 'optimized' && result.improvements && result.improvements.length > 0 && (
+              <div style={{ marginTop: 'var(--space-3)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--border-secondary)' }}>
+                <span className="category-label" style={{ display: 'block', marginBottom: '6px' }}>{t.improvements}</span>
+                <div className="chips-container">
+                  {result.improvements.map((imp, i) => (
+                    <span key={i} className="tag">✓ {imp}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
