@@ -68,5 +68,5 @@ You retain 100% control over your data:
 ## 7. Contact & Inquiries
 
 For questions, feedback, or security concerns:
-- **Project Repository:** https://github.com/promnexa/promnexa
-- **Issues & Support:** https://github.com/promnexa/promnexa/issues
+- **Project Repository:** https://github.com/AyonO1/Promnexa
+- **Issues & Support:** https://github.com/AyonO1/Promnexa/issues

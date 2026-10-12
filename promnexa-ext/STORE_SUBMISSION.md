@@ -14,8 +14,8 @@ This document contains all materials, descriptions, permission justifications, a
 - **Primary Category:** Productivity
 - **Secondary Category:** Developer Tools / Education
 - **Languages:** English, Bengali (বাংলা)
-- **Support URL:** https://github.com/promnexa/promnexa/issues
-- **Privacy Policy URL:** https://github.com/promnexa/promnexa/blob/main/PRIVACY.md
+- **Support URL:** https://github.com/AyonO1/Promnexa/issues
+- **Privacy Policy URL:** https://github.com/AyonO1/Promnexa/blob/main/promnexa-ext/PRIVACY.md
 
 ---
 

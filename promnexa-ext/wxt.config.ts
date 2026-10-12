@@ -5,8 +5,9 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: {
     name: 'Promnexa — AI Prompt Optimizer',
-    description: 'Turn ideas into better prompts. An intelligent prompt optimizer that transforms simple instructions into powerful, well-structured AI prompts.',
+    description: 'Turn ideas into better prompts. Transform simple instructions into structured, high-performing AI prompts.',
     version: '1.0.0',
+    homepage_url: 'https://github.com/AyonO1/Promnexa',
     permissions: ['storage', 'contextMenus', 'activeTab'],
     icons: {
       16: '/icon/16.png',
