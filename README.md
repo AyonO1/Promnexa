@@ -2,7 +2,7 @@
 
 > **Turn ideas into better prompts.**
 
-Promnexa is a premium, cross-browser extension that converts simple, unclear, or incomplete instructions into powerful, well-structured, optimized prompts for AI models (ChatGPT, Claude, Gemini, DeepSeek, and more).
+Promnexa is a free, local-first, cross-browser extension that converts simple, unclear, or incomplete instructions into powerful, well-structured, optimized prompts for AI models (ChatGPT, Claude, Gemini, DeepSeek, and more).
 
 Inspired by the design craftsmanship of **Linear**, **Raycast**, and **Arc**, Promnexa delivers a calm, high-performance, and distraction-free experience directly inside your browser.
 
@@ -31,7 +31,7 @@ You don't need Node.js, git, or coding experience to use Promnexa!
   - 🔍 **Deep:** Detailed structure with role context, clear objectives, constraints, and output formats.
   - 🎓 **Expert:** High-level domain standards, edge cases, and technical rigor.
   - 🐣 **Beginner:** Step-by-step guidance, intuitive analogies, and accessible explanations.
-- **200+ Curated Prompt Templates:** Across 8 categories (Education, Coding, Learning, Productivity, Writing, Research, Business, General).
+- **200+ Built-in and Imported Prompt Templates:** Across 8 categories (Education, Coding, Learning, Productivity, Writing, Research, Business, General).
 - **Clipboard & Quick Actions:** 1-click **Paste** from clipboard, plus direct **"Open in ChatGPT"** and **"Open in Claude"** shortcuts.
 - **Bilingual Design System:** Custom dark & light themes, Bengali & English support, smooth micro-interactions.
 - **Privacy First:** 100% local browser storage; zero telemetry, zero analytics.
@@ -58,7 +58,7 @@ Promnexa/
     ├── lib/                    # Optimization engine, AI provider, storage & templates
     ├── public/                 # Extension icons & assets
     ├── scripts/                # Dataset curation & icon generator scripts
-    ├── tests/                  # Automated test suite (25 unit tests)
+    ├── tests/                  # Automated test suite (55 regression tests)
     ├── PRIVACY.md              # Privacy policy
     ├── STORE_SUBMISSION.md     # Web Store submission checklist
     ├── SAFARI_PACKAGING.md     # Safari packaging instructions
@@ -97,3 +97,14 @@ On Windows, you can also double-click [`build.bat`](build.bat) or [`start-dev.ba
 ## 📄 License
 
 MIT License. Curated public prompts derived from Awesome ChatGPT Prompts (CC0 1.0 Universal).
+
+
+## Version 1.1.0: client workflows and reliability
+
+Free local/BYOK launch. Added client profiles, guided bilingual proposal/ad/reply briefs, editable variables, saved revisions and local usefulness feedback. Fixed history privacy, secret exports, import validation, AI timeout/fallback, settings refresh, category handling and dataset CSV parsing. Local mode makes no external font/API requests. AI providers may bill your API usage separately.
+
+See `RELEASE_NOTES_1.1.0.md`, `TESTING_REPORT.md` and `LAUNCH_PLAN.md` in `promnexa-ext/` (or this directory when already inside the extension project). Firefox requires version 140+ and optional AI data-sharing consent. Do not load the repository source root in Chrome: use `.output/chrome-mv3` after building, or an extracted release ZIP.
+
+
+## Version 1.1.1: direct in-chat improvement
+Type a draft in a supported AI chat, click **Improve prompt**, review the replacement, then press Send yourself. **Undo** restores the original while protecting newer edits. **Options** retains mode previews and explicit configured-AI use. Alt+Shift+P improves the current draft locally. Reload the extension and refresh open AI-site tabs after updating.

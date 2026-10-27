@@ -1,6 +1,6 @@
-import React from 'react';
-import type { ToastMessage } from '../../../lib/types';
-import { CheckCircle, AlertCircle, Info, X } from 'lucide-react';
+import React from "react";
+import type { ToastMessage } from "../../../lib/types";
+import { CheckCircle, AlertCircle, Info, X } from "lucide-react";
 
 interface ToastProps {
   toast: ToastMessage;
@@ -15,10 +15,10 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
     return () => clearTimeout(timer);
   }, [toast.id, toast.duration, onDismiss]);
 
-  const iconMap: Record<ToastMessage['type'], React.ReactNode> = {
-    success: <CheckCircle style={{ color: 'var(--success)' }} />,
-    error: <AlertCircle style={{ color: 'var(--error)' }} />,
-    info: <Info style={{ color: 'var(--info)' }} />,
+  const iconMap: Record<ToastMessage["type"], React.ReactNode> = {
+    success: <CheckCircle style={{ color: "var(--success)" }} />,
+    error: <AlertCircle style={{ color: "var(--error)" }} />,
+    info: <Info style={{ color: "var(--info)" }} />,
   };
 
   return (
@@ -33,19 +33,22 @@ export const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
 export function useToast() {
   const [toasts, setToasts] = React.useState<ToastMessage[]>([]);
 
-  const addToast = React.useCallback((message: string, type: ToastMessage['type'] = 'success') => {
-    const id = Date.now().toString(36);
-    setToasts(prev => [...prev, { id, message, type }]);
-  }, []);
+  const addToast = React.useCallback(
+    (message: string, type: ToastMessage["type"] = "success") => {
+      const id = crypto.randomUUID();
+      setToasts((prev) => [...prev, { id, message, type }]);
+    },
+    [],
+  );
 
   const dismissToast = React.useCallback((id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const ToastContainer = React.useMemo(() => {
     const Container: React.FC = () => (
       <div className="toast-container">
-        {toasts.map(toast => (
+        {toasts.map((toast) => (
           <Toast key={toast.id} toast={toast} onDismiss={dismissToast} />
         ))}
       </div>
