@@ -2,7 +2,7 @@
 
 > **Turn ideas into better prompts.**
 
-Promnexa is a premium, cross-browser extension that converts simple, unclear, or incomplete instructions into powerful, well-structured, optimized prompts for AI models (ChatGPT, Claude, Gemini, DeepSeek, and more).
+Promnexa is a free, local-first, cross-browser extension that converts simple, unclear, or incomplete instructions into powerful, well-structured, optimized prompts for AI models (ChatGPT, Claude, Gemini, DeepSeek, and more).
 
 Inspired by the design craftsmanship of **Linear**, **Raycast**, and **Arc**, Promnexa delivers a calm, high-performance, and distraction-free experience directly inside your browser.
 
@@ -21,7 +21,7 @@ Inspired by the design craftsmanship of **Linear**, **Raycast**, and **Arc**, Pr
 - **Beginner Optimize:** Step-by-step guidance with accessible language and intuitive analogies.
 - **Quick Refinements:** One-click shortcuts under results to make concise, make detailed, add examples, or copy back to the editor.
 
-### 📚 3. Extensive Prompt Library (200+ Curated Templates)
+### 📚 3. Extensive Prompt Library (200+ Built-in and Imported Templates)
 - Hand-crafted and normalized prompt templates across 8 primary categories:
   - 🎓 **Education:** Exam revision, complex explanations, academic writing, thesis research, MCQ generators.
   - 💻 **Coding:** Bug debugging, fullstack architecture, code refactoring, test generation, security audits.
@@ -67,7 +67,7 @@ Inspired by the design craftsmanship of **Linear**, **Raycast**, and **Arc**, Pr
 ## 🚀 Getting Started
 
 ### 1. Prerequisites
-- Node.js 18+ (Node 24 recommended)
+- Node.js 22.18+ (Node 24 recommended)
 - npm
 
 ### 2. Installation
@@ -192,3 +192,14 @@ Result: **25 passed / 0 failed (100% pass rate in <250ms)**.
 ## 📄 License
 
 MIT License. Curated public prompts derived from Awesome ChatGPT Prompts (CC0 1.0 Universal).
+
+
+## Version 1.1.0: client workflows and reliability
+
+Free local/BYOK launch. Added client profiles, guided bilingual proposal/ad/reply briefs, editable variables, saved revisions and local usefulness feedback. Fixed history privacy, secret exports, import validation, AI timeout/fallback, settings refresh, category handling and dataset CSV parsing. Local mode makes no external font/API requests. AI providers may bill your API usage separately.
+
+See `RELEASE_NOTES_1.1.0.md`, `TESTING_REPORT.md` and `LAUNCH_PLAN.md` in `promnexa-ext/` (or this directory when already inside the extension project). Firefox requires version 140+ and optional AI data-sharing consent. Do not load the repository source root in Chrome: use `.output/chrome-mv3` after building, or an extracted release ZIP.
+
+
+## Version 1.1.1: direct in-chat improvement
+Type a draft in a supported AI chat, click **Improve prompt**, review the replacement, then press Send yourself. **Undo** restores the original while protecting newer edits. **Options** retains mode previews and explicit configured-AI use. Alt+Shift+P improves the current draft locally. Reload the extension and refresh open AI-site tabs after updating.

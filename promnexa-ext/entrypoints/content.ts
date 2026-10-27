@@ -4,34 +4,43 @@
  * Provides an interactive floating optimizer button and instant in-page prompt enhancement.
  */
 
-import { optimizePrompt, detectCategory } from '../lib/optimizer';
-import type { Category, OptimizationMode } from '../lib/types';
+import { optimizePrompt, detectCategory } from "../lib/optimizer";
+import type { Category, OptimizationMode } from "../lib/types";
 
 export default defineContentScript({
   matches: [
-    '*://chatgpt.com/*',
-    '*://chat.openai.com/*',
-    '*://claude.ai/*',
-    '*://gemini.google.com/*',
-    '*://perplexity.ai/*',
-    '*://copilot.microsoft.com/*',
-    '*://chat.deepseek.com/*',
-    '*://grok.com/*',
-    '*://x.com/i/grok*',
+    "*://chatgpt.com/*",
+    "*://chat.openai.com/*",
+    "*://claude.ai/*",
+    "*://gemini.google.com/*",
+    "*://perplexity.ai/*",
+    "*://copilot.microsoft.com/*",
+    "*://chat.deepseek.com/*",
+    "*://grok.com/*",
+    "*://x.com/i/grok*",
   ],
-  runAt: 'document_idle',
+  runAt: "document_idle",
 
   main() {
     let promnexaBtn: HTMLElement | null = null;
     let promnexaCard: HTMLElement | null = null;
     let isEnabled = false;
-    let previousOriginalText = '';
-    let currentMode: OptimizationMode = 'quick';
+    let promnexaControls: HTMLElement | null = null;
+    let undoButton: HTMLButtonElement | null = null;
+    let lastChange: {
+      element: HTMLElement;
+      original: string;
+      improved: string;
+      url: string;
+    } | null = null;
+    let currentMode: OptimizationMode = "quick";
 
     // Check if integration is enabled for this site
     async function checkEnabled(): Promise<boolean> {
       try {
-        const result = (await browser.storage.local.get('promnexa_settings')) as Record<string, any>;
+        const result = (await browser.storage.local.get(
+          "promnexa_settings",
+        )) as Record<string, any>;
         const settings = result?.promnexa_settings;
         if (!settings || !Array.isArray(settings.websiteIntegrations)) {
           return true; // Default to enabled
@@ -39,7 +48,10 @@ export default defineContentScript({
 
         const hostname = window.location.hostname;
         const integration = settings.websiteIntegrations.find(
-          (i: { site: string; enabled: boolean }) => hostname.includes(i.site)
+          (i: { site: string; enabled: boolean }) =>
+            hostname === i.site ||
+            (hostname === "chat.openai.com" && i.site === "chatgpt.com") ||
+            (hostname === "x.com" && i.site === "grok.com"),
         );
         return integration ? integration.enabled : true;
       } catch {
@@ -51,7 +63,7 @@ export default defineContentScript({
     const INPUT_SELECTORS = [
       // ChatGPT
       'textarea[data-id="root"]',
-      '#prompt-textarea',
+      "#prompt-textarea",
       'div[contenteditable="true"][data-placeholder]',
       'div[contenteditable="true"]#prompt-textarea',
       // Claude
@@ -60,24 +72,33 @@ export default defineContentScript({
       // Gemini
       'rich-textarea div[contenteditable="true"]',
       'div[contenteditable="true"].ql-editor',
-      '.text-input-field textarea',
+      ".text-input-field textarea",
       // DeepSeek
-      'textarea#chat-input',
+      "textarea#chat-input",
       'textarea[placeholder*="DeepSeek"]',
       // Grok & Copilot & Generic
       'textarea[placeholder*="Ask"]',
       'textarea[placeholder*="Message"]',
       'textarea[placeholder*="message"]',
       'div[contenteditable="true"]',
-      'textarea',
+      "textarea",
     ];
 
     // Get active input element
     function getActiveInputElement(): HTMLElement | null {
       for (const selector of INPUT_SELECTORS) {
-        const el = document.querySelector(selector) as HTMLElement;
-        if (el && el.offsetParent !== null) {
-          return el;
+        for (const el of document.querySelectorAll<HTMLElement>(selector)) {
+          if (
+            el.closest("[data-promnexa-ui], #promnexa-quick-card") ||
+            el.offsetParent === null
+          )
+            continue;
+          if (
+            el instanceof HTMLTextAreaElement ||
+            el instanceof HTMLInputElement
+          ) {
+            if (!el.disabled && !el.readOnly) return el;
+          } else if (el.isContentEditable) return el;
         }
       }
       return null;
@@ -85,39 +106,178 @@ export default defineContentScript({
 
     // Read current text from the AI site's chat input
     function getCurrentPromptText(): string {
-      const el = getActiveInputElement();
-      if (!el) return '';
+      return readPrompt(getActiveInputElement());
+    }
 
+    function readPrompt(el: HTMLElement | null): string {
+      if (!el) return "";
       if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
-        return el.value || '';
+        return el.value || "";
       }
-      return el.innerText || el.textContent || '';
+      return el.innerText || el.textContent || "";
     }
 
     // Insert text into the AI site's chat input with full synthetic event dispatch
-    function setPromptText(text: string): boolean {
-      const el = getActiveInputElement();
-      if (!el) return false;
+    function setPromptText(
+      text: string,
+      el = getActiveInputElement(),
+    ): boolean {
+      if (!el?.isConnected) return false;
 
       el.focus();
 
       if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
-        el.value = text;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
+        const proto =
+          el instanceof HTMLTextAreaElement
+            ? HTMLTextAreaElement.prototype
+            : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+        if (setter) setter.call(el, text);
+        else el.value = text;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
         return true;
       }
 
       // For contenteditable elements (Claude, Gemini, modern ChatGPT)
       try {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        if (document.execCommand("insertText", false, text)) return true;
         el.innerText = text;
-        el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.dispatchEvent(
+          new InputEvent("input", {
+            bubbles: true,
+            inputType: "insertText",
+            data: text,
+          }),
+        );
+        el.dispatchEvent(new Event("change", { bubbles: true }));
         return true;
       } catch {
         el.textContent = text;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event("input", { bubbles: true }));
         return true;
+      }
+    }
+
+    function syncUndo() {
+      if (!undoButton) return;
+      const available =
+        lastChange &&
+        lastChange.url === location.href &&
+        lastChange.element.isConnected &&
+        getActiveInputElement() === lastChange.element;
+      undoButton.style.display = available ? "inline-flex" : "none";
+      undoButton.disabled =
+        !available || readPrompt(lastChange!.element) !== lastChange!.improved;
+      undoButton.title = undoButton.disabled
+        ? "Your draft changed; Undo will not overwrite your edits."
+        : "Restore your exact original prompt";
+    }
+
+    function applyImprovement(
+      improved: string,
+      element: HTMLElement | null,
+      original: string,
+    ): boolean {
+      if (
+        !isEnabled ||
+        !element?.isConnected ||
+        getActiveInputElement() !== element ||
+        readPrompt(element) !== original
+      ) {
+        showNotification(
+          "Your draft changed. Improve the current prompt again; your edits were kept.",
+        );
+        return false;
+      }
+      if (improved === original || improved === original.trim()) {
+        showNotification(
+          "This prompt already fits. Review it and press Send when ready.",
+        );
+        return true;
+      }
+      if (!setPromptText(improved, element)) {
+        showNotification(
+          "Could not update the chat input. Your original draft was kept.",
+        );
+        return false;
+      }
+      // Rich editors can normalize line breaks; guard against the text actually inserted.
+      lastChange = {
+        element,
+        original,
+        improved: readPrompt(element),
+        url: location.href,
+      };
+      syncUndo();
+      showNotification(
+        "Prompt improved. Review it, then press Send. Undo restores the original.",
+      );
+      return true;
+    }
+
+    function improveInChat() {
+      if (!isEnabled) return;
+      const element = getActiveInputElement();
+      if (!element) {
+        showNotification("No editable chat input found.");
+        return;
+      }
+      const original = readPrompt(element);
+      if (!original.trim()) {
+        showNotification("Type your prompt in the chat box first.");
+        element.focus();
+        return;
+      }
+      if (
+        lastChange?.element === element &&
+        lastChange.url === location.href &&
+        lastChange.improved === original
+      ) {
+        showNotification(
+          "Already improved. Review and send, or use Undo to restore your original.",
+        );
+        return;
+      }
+      closeOptimizerCard();
+      try {
+        applyImprovement(
+          optimizePrompt(original, detectCategory(original), currentMode)
+            .optimized,
+          element,
+          original,
+        );
+      } catch (error) {
+        showNotification(
+          (error as Error).message || "Could not improve this prompt.",
+        );
+      }
+    }
+
+    function undoImprovement() {
+      const change = lastChange;
+      if (
+        !change ||
+        change.url !== location.href ||
+        !change.element.isConnected ||
+        getActiveInputElement() !== change.element ||
+        readPrompt(change.element) !== change.improved
+      ) {
+        showNotification(
+          "Your draft changed. Undo will not overwrite your edits.",
+        );
+        syncUndo();
+        return;
+      }
+      if (setPromptText(change.original, change.element)) {
+        lastChange = null;
+        syncUndo();
+        showNotification("Original prompt restored.");
       }
     }
 
@@ -125,11 +285,14 @@ export default defineContentScript({
     function createFloatingButton() {
       if (promnexaBtn) return;
 
-      promnexaBtn = document.createElement('div');
-      promnexaBtn.id = 'promnexa-float-btn';
-      promnexaBtn.setAttribute('role', 'button');
-      promnexaBtn.setAttribute('tabindex', '0');
-      promnexaBtn.title = 'Promnexa: Quick Optimize (Alt+Shift+P)';
+      promnexaBtn = document.createElement("button");
+      (promnexaBtn as HTMLButtonElement).type = "button";
+      promnexaBtn.id = "promnexa-float-btn";
+      promnexaBtn.setAttribute("role", "button");
+      promnexaBtn.setAttribute("tabindex", "0");
+      promnexaBtn.title =
+        "Improve prompt locally in this chat (Alt+Shift+P). Review before sending.";
+      promnexaBtn.setAttribute("aria-label", "Improve prompt");
 
       promnexaBtn.innerHTML = `
         <svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -137,50 +300,104 @@ export default defineContentScript({
           <path d="M10 20L14 12H18L22 20" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M12 17H20" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
           <circle cx="16" cy="9" r="1.5" fill="white"/>
-        </svg>
+        </svg><span>Improve prompt</span>
       `;
 
       Object.assign(promnexaBtn.style, {
-        position: 'fixed',
-        bottom: '84px',
-        right: '24px',
-        width: '42px',
-        height: '42px',
-        borderRadius: '12px',
-        background: 'linear-gradient(135deg, #817CF5 0%, #6366F1 100%)',
-        color: 'white',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        zIndex: '2147483640',
-        boxShadow: '0 4px 16px rgba(129, 124, 245, 0.45)',
-        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
-        border: '1px solid rgba(255, 255, 255, 0.25)',
-        outline: 'none',
-        userSelect: 'none',
+        position: "fixed",
+        bottom: "84px",
+        right: "24px",
+        width: "42px",
+        height: "42px",
+        borderRadius: "12px",
+        background: "linear-gradient(135deg, #817CF5 0%, #6366F1 100%)",
+        color: "white",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        zIndex: "2147483640",
+        boxShadow: "0 4px 16px rgba(129, 124, 245, 0.45)",
+        transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+        border: "1px solid rgba(255, 255, 255, 0.25)",
+        outline: "none",
+        userSelect: "none",
       });
 
-      promnexaBtn.addEventListener('mouseenter', () => {
+      promnexaBtn.addEventListener("mouseenter", () => {
         if (promnexaBtn) {
-          promnexaBtn.style.transform = 'scale(1.08) translateY(-2px)';
-          promnexaBtn.style.boxShadow = '0 8px 24px rgba(129, 124, 245, 0.6)';
+          promnexaBtn.style.transform = "scale(1.08) translateY(-2px)";
+          promnexaBtn.style.boxShadow = "0 8px 24px rgba(129, 124, 245, 0.6)";
         }
       });
 
-      promnexaBtn.addEventListener('mouseleave', () => {
+      promnexaBtn.addEventListener("mouseleave", () => {
         if (promnexaBtn) {
-          promnexaBtn.style.transform = 'scale(1) translateY(0)';
-          promnexaBtn.style.boxShadow = '0 4px 16px rgba(129, 124, 245, 0.45)';
+          promnexaBtn.style.transform = "scale(1) translateY(0)";
+          promnexaBtn.style.boxShadow = "0 4px 16px rgba(129, 124, 245, 0.45)";
         }
       });
 
-      promnexaBtn.addEventListener('click', (e) => {
+      promnexaBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        toggleOptimizerCard();
+        improveInChat();
       });
 
-      document.body.appendChild(promnexaBtn);
+      promnexaControls = document.createElement("div");
+      promnexaControls.id = "promnexa-controls";
+      promnexaControls.dataset.promnexaUi = "true";
+      Object.assign(promnexaControls.style, {
+        position: "fixed",
+        bottom: "84px",
+        right: "24px",
+        display: "flex",
+        gap: "6px",
+        alignItems: "center",
+        zIndex: "2147483640",
+        maxWidth: "calc(100vw - 32px)",
+      });
+      Object.assign(promnexaBtn.style, {
+        position: "relative",
+        bottom: "auto",
+        right: "auto",
+        width: "auto",
+        padding: "0 12px",
+        gap: "6px",
+        fontSize: "12px",
+        fontFamily: "system-ui, sans-serif",
+        whiteSpace: "nowrap",
+      });
+      const options = document.createElement("button");
+      options.id = "promnexa-options-btn";
+      options.type = "button";
+      options.textContent = "Options";
+      options.title =
+        "Preview modes or explicitly use your configured AI provider";
+      undoButton = document.createElement("button");
+      undoButton.id = "promnexa-undo-btn";
+      undoButton.type = "button";
+      undoButton.textContent = "Undo";
+      for (const control of [options, undoButton])
+        Object.assign(control.style, {
+          padding: "8px 10px",
+          borderRadius: "8px",
+          border: "1px solid #817CF5",
+          background: "#181A20",
+          color: "#F4F4F6",
+          cursor: "pointer",
+          font: "12px system-ui, sans-serif",
+        });
+      undoButton.addEventListener("click", (e) => {
+        e.stopPropagation();
+        undoImprovement();
+      });
+      options.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (isEnabled) toggleOptimizerCard();
+      });
+      promnexaControls.append(promnexaBtn, undoButton, options);
+      document.body.appendChild(promnexaControls);
+      syncUndo();
     }
 
     // Toggle the in-page optimizer card overlay
@@ -195,12 +412,11 @@ export default defineContentScript({
     // Close the card
     function closeOptimizerCard() {
       if (promnexaCard) {
-        promnexaCard.style.opacity = '0';
-        promnexaCard.style.transform = 'translateY(8px) scale(0.97)';
-        setTimeout(() => {
-          promnexaCard?.remove();
-          promnexaCard = null;
-        }, 150);
+        promnexaCard.style.opacity = "0";
+        promnexaCard.style.transform = "translateY(8px) scale(0.97)";
+        const closing = promnexaCard;
+        promnexaCard = null;
+        closing.remove();
       }
     }
 
@@ -208,35 +424,43 @@ export default defineContentScript({
     function openOptimizerCard() {
       if (promnexaCard) promnexaCard.remove();
 
-      const rawText = getCurrentPromptText().trim();
-      previousOriginalText = rawText;
+      const originalElement = getActiveInputElement();
+      const originalDraft = readPrompt(originalElement);
+      const rawText = originalDraft.trim();
 
-      const detectedCat: Category = rawText ? detectCategory(rawText) : 'general';
-      let currentResult = rawText ? optimizePrompt(rawText, detectedCat, currentMode) : null;
+      const detectedCat: Category = rawText
+        ? detectCategory(rawText)
+        : "general";
+      let aiRequest = 0;
+      let currentResult = rawText
+        ? optimizePrompt(rawText, detectedCat, currentMode)
+        : null;
 
-      promnexaCard = document.createElement('div');
-      promnexaCard.id = 'promnexa-quick-card';
+      promnexaCard = document.createElement("div");
+      promnexaCard.id = "promnexa-quick-card";
 
       Object.assign(promnexaCard.style, {
-        position: 'fixed',
-        bottom: '136px',
-        right: '24px',
-        width: '380px',
-        maxWidth: 'calc(100vw - 32px)',
-        maxHeight: '480px',
-        borderRadius: '16px',
-        background: '#181A20',
-        color: '#F4F4F6',
-        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        fontSize: '13px',
-        zIndex: '2147483645',
-        boxShadow: '0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08)',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        opacity: '0',
-        transform: 'translateY(8px) scale(0.97)',
-        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+        position: "fixed",
+        bottom: "136px",
+        right: "24px",
+        width: "380px",
+        maxWidth: "calc(100vw - 32px)",
+        maxHeight: "480px",
+        borderRadius: "16px",
+        background: "#181A20",
+        color: "#F4F4F6",
+        fontFamily:
+          'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        fontSize: "13px",
+        zIndex: "2147483645",
+        boxShadow:
+          "0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        opacity: "0",
+        transform: "translateY(8px) scale(0.97)",
+        transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
       });
 
       // Render the inner HTML
@@ -244,17 +468,18 @@ export default defineContentScript({
         if (!promnexaCard) return;
 
         const modes: { key: OptimizationMode; label: string }[] = [
-          { key: 'quick', label: 'Quick' },
-          { key: 'deep', label: 'Deep' },
-          { key: 'expert', label: 'Expert' },
-          { key: 'beginner', label: 'Beginner' },
+          { key: "quick", label: "Quick" },
+          { key: "deep", label: "Deep" },
+          { key: "expert", label: "Expert" },
+          { key: "beginner", label: "Beginner" },
         ];
 
-        let bodyHtml = '';
+        let bodyHtml = "";
 
         if (currentResult) {
           bodyHtml = `
             <div style="padding: 12px 14px 4px;">
+              <button id="pmx-ai" style="padding:6px;margin-bottom:8px;background:#22252D;color:#E2E8F0;border:1px solid #817CF5;border-radius:6px;cursor:pointer">Use configured AI (sends this prompt to your provider)</button>
               <div style="display: flex; gap: 6px; margin-bottom: 10px;">
                 ${modes
                   .map(
@@ -263,17 +488,17 @@ export default defineContentScript({
                     flex: 1;
                     padding: 5px 0;
                     border-radius: 8px;
-                    border: 1px solid ${m.key === currentMode ? '#817CF5' : 'rgba(255,255,255,0.08)'};
-                    background: ${m.key === currentMode ? 'rgba(129,124,245,0.2)' : '#22252D'};
-                    color: ${m.key === currentMode ? '#A5B4FC' : '#9CA3AF'};
+                    border: 1px solid ${m.key === currentMode ? "#817CF5" : "rgba(255,255,255,0.08)"};
+                    background: ${m.key === currentMode ? "rgba(129,124,245,0.2)" : "#22252D"};
+                    color: ${m.key === currentMode ? "#A5B4FC" : "#9CA3AF"};
                     font-size: 11px;
                     font-weight: 500;
                     cursor: pointer;
                     transition: all 0.15s ease;
                   ">${m.label}</button>
-                `
+                `,
                   )
-                  .join('')}
+                  .join("")}
               </div>
 
               <div style="
@@ -425,7 +650,7 @@ export default defineContentScript({
                 color: #A5B4FC;
                 text-transform: capitalize;
               ">${detectedCat}</span>`
-                  : ''
+                  : ""
               }
             </div>
 
@@ -445,18 +670,50 @@ export default defineContentScript({
         `;
 
         // Attach event handlers inside card
-        const closeBtn = promnexaCard!.querySelector('#pmx-close-btn');
-        closeBtn?.addEventListener('click', (e) => {
+        const closeBtn = promnexaCard!.querySelector("#pmx-close-btn");
+        closeBtn?.addEventListener("click", (e) => {
           e.stopPropagation();
           closeOptimizerCard();
         });
 
+        const card = promnexaCard;
+        card?.querySelector("#pmx-ai")?.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const button = e.currentTarget as HTMLButtonElement;
+          const request = ++aiRequest;
+          button.disabled = true;
+          button.textContent = "Optimizing with AI…";
+          try {
+            const response = await browser.runtime.sendMessage({
+              type: "PROMNEXA_AI",
+              text: rawText,
+              category: detectedCat,
+              mode: currentMode,
+            });
+            if (promnexaCard !== card || request !== aiRequest) return;
+            if (!response?.result)
+              throw new Error(response?.error || "AI unavailable");
+            currentResult = response.result;
+            renderCardContent();
+            showNotification("AI optimization ready.");
+          } catch (error) {
+            if (promnexaCard === card && request === aiRequest) {
+              button.disabled = false;
+              button.textContent = "Retry configured AI";
+              showNotification(
+                (error as Error).message + " Local result is still available.",
+              );
+            }
+          }
+        });
         // Mode switch buttons
-        promnexaCard!.querySelectorAll('.pmx-mode-btn').forEach((btn) => {
-          btn.addEventListener('click', (e) => {
+        promnexaCard!.querySelectorAll(".pmx-mode-btn").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
             e.stopPropagation();
-            const targetMode = (btn as HTMLElement).dataset.mode as OptimizationMode;
+            const targetMode = (btn as HTMLElement).dataset
+              .mode as OptimizationMode;
             if (targetMode && rawText) {
+              aiRequest++;
               currentMode = targetMode;
               currentResult = optimizePrompt(rawText, detectedCat, targetMode);
               renderCardContent();
@@ -465,38 +722,44 @@ export default defineContentScript({
         });
 
         // Insert into chat
-        const insertBtn = promnexaCard!.querySelector('#pmx-btn-insert');
-        insertBtn?.addEventListener('click', (e) => {
+        const insertBtn = promnexaCard!.querySelector("#pmx-btn-insert");
+        insertBtn?.addEventListener("click", (e) => {
           e.stopPropagation();
           if (currentResult) {
-            setPromptText(currentResult.optimized);
-            showNotification('✨ Prompt optimized and inserted into chat!');
+            if (
+              !applyImprovement(
+                currentResult.optimized,
+                originalElement,
+                originalDraft,
+              )
+            )
+              return;
             closeOptimizerCard();
           }
         });
 
         // Copy button
-        const copyBtn = promnexaCard!.querySelector('#pmx-btn-copy');
-        copyBtn?.addEventListener('click', async (e) => {
+        const copyBtn = promnexaCard!.querySelector("#pmx-btn-copy");
+        copyBtn?.addEventListener("click", async (e) => {
           e.stopPropagation();
           if (currentResult) {
             try {
               await navigator.clipboard.writeText(currentResult.optimized);
-              copyBtn.textContent = '✓ Copied!';
+              copyBtn.textContent = "✓ Copied!";
               setTimeout(() => {
-                if (copyBtn) copyBtn.textContent = '📋 Copy';
+                if (copyBtn) copyBtn.textContent = "📋 Copy";
               }, 1500);
             } catch {
-              showNotification('Failed to copy to clipboard.');
+              showNotification("Failed to copy to clipboard.");
             }
           }
         });
 
         // Starter template buttons
-        promnexaCard!.querySelectorAll('.pmx-starter-btn').forEach((btn) => {
-          btn.addEventListener('click', (e) => {
+        promnexaCard!.querySelectorAll(".pmx-starter-btn").forEach((btn) => {
+          btn.addEventListener("click", (e) => {
             e.stopPropagation();
-            const starterText = (btn as HTMLElement).dataset.text || '';
+            const starterText = (btn as HTMLElement).dataset.text || "";
             if (starterText) {
               const cat = detectCategory(starterText);
               currentResult = optimizePrompt(starterText, cat, currentMode);
@@ -512,8 +775,8 @@ export default defineContentScript({
       // Animate card in
       requestAnimationFrame(() => {
         if (promnexaCard) {
-          promnexaCard.style.opacity = '1';
-          promnexaCard.style.transform = 'translateY(0) scale(1)';
+          promnexaCard.style.opacity = "1";
+          promnexaCard.style.transform = "translateY(0) scale(1)";
         }
       });
     }
@@ -521,72 +784,77 @@ export default defineContentScript({
     // Helper to escape HTML characters
     function escapeHtml(str: string): string {
       return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
 
     // Floating subtle toast notification
     function showNotification(message: string) {
-      const existing = document.getElementById('promnexa-notification');
+      const existing = document.getElementById("promnexa-notification");
       if (existing) existing.remove();
 
-      const notification = document.createElement('div');
-      notification.id = 'promnexa-notification';
+      const notification = document.createElement("div");
+      notification.id = "promnexa-notification";
       notification.textContent = message;
 
       Object.assign(notification.style, {
-        position: 'fixed',
-        bottom: '136px',
-        right: '24px',
-        maxWidth: '280px',
-        padding: '10px 14px',
-        borderRadius: '10px',
-        background: '#1F2937',
-        color: '#F9FAFB',
-        fontSize: '12px',
-        fontWeight: '500',
-        fontFamily: 'Inter, -apple-system, sans-serif',
-        zIndex: '2147483647',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1)',
-        opacity: '0',
-        transform: 'translateY(6px)',
-        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+        position: "fixed",
+        bottom: "136px",
+        right: "24px",
+        maxWidth: "280px",
+        padding: "10px 14px",
+        borderRadius: "10px",
+        background: "#1F2937",
+        color: "#F9FAFB",
+        fontSize: "12px",
+        fontWeight: "500",
+        fontFamily: "Inter, -apple-system, sans-serif",
+        zIndex: "2147483647",
+        boxShadow:
+          "0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1)",
+        opacity: "0",
+        transform: "translateY(6px)",
+        transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
       });
 
       document.body.appendChild(notification);
 
       requestAnimationFrame(() => {
-        notification.style.opacity = '1';
-        notification.style.transform = 'translateY(0)';
+        notification.style.opacity = "1";
+        notification.style.transform = "translateY(0)";
       });
 
       setTimeout(() => {
-        notification.style.opacity = '0';
-        notification.style.transform = 'translateY(6px)';
+        notification.style.opacity = "0";
+        notification.style.transform = "translateY(6px)";
         setTimeout(() => notification.remove(), 180);
       }, 3000);
     }
 
     // Global click listener to close card on outside click
-    document.addEventListener('click', (e) => {
+    document.addEventListener("click", (e) => {
       const target = e.target as HTMLElement;
       if (
         promnexaCard &&
         !promnexaCard.contains(target) &&
-        !promnexaBtn?.contains(target)
+        !promnexaControls?.contains(target)
       ) {
         closeOptimizerCard();
       }
     });
 
-    // Keyboard shortcut within page: Alt+Shift+P toggles the card
-    document.addEventListener('keydown', (e) => {
-      if (e.altKey && e.shiftKey && (e.key === 'p' || e.key === 'P')) {
+    document.addEventListener("input", syncUndo);
+    window.addEventListener("popstate", syncUndo);
+
+    // Keyboard shortcut improves the current draft without submitting it.
+    document.addEventListener("keydown", (e) => {
+      if (e.altKey && e.shiftKey && (e.key === "p" || e.key === "P")) {
+        if (!isEnabled || e.repeat) return;
         e.preventDefault();
-        toggleOptimizerCard();
+        improveInChat();
       }
     });
 
@@ -605,8 +873,11 @@ export default defineContentScript({
         if (isEnabled) {
           createFloatingButton();
         } else {
-          promnexaBtn?.remove();
+          promnexaControls?.remove();
+          promnexaControls = null;
           promnexaBtn = null;
+          undoButton = null;
+          lastChange = null;
           closeOptimizerCard();
         }
       }

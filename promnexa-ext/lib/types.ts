@@ -1,15 +1,33 @@
 // ---- Core Types ----
-export type Theme = 'dark' | 'light' | 'system';
+export type Theme = "dark" | "light" | "system";
 
-export type Screen = 'optimize' | 'library' | 'saved' | 'settings';
+export type Screen =
+  | "optimize"
+  | "library"
+  | "saved"
+  | "settings"
+  | "workflows";
 
-export type Category = 'education' | 'coding' | 'learning' | 'daily' | 'writing' | 'research' | 'business' | 'general';
+export type Category =
+  | "education"
+  | "coding"
+  | "learning"
+  | "daily"
+  | "writing"
+  | "research"
+  | "business"
+  | "general";
 
-export type OptimizationMode = 'quick' | 'deep' | 'expert' | 'beginner' | 'custom';
+export type OptimizationMode =
+  | "quick"
+  | "deep"
+  | "expert"
+  | "beginner"
+  | "custom";
 
-export type SavedTab = 'favorites' | 'history' | 'templates';
+export type SavedTab = "favorites" | "history" | "templates";
 
-export type ComparisonView = 'optimized' | 'original';
+export type ComparisonView = "optimized" | "original";
 
 export interface PromptTemplate {
   id: string;
@@ -35,11 +53,13 @@ export interface SavedPrompt {
   isFavorite: boolean;
   createdAt: number;
   tags?: string[];
+  parentId?: string;
+  feedback?: "useful" | "needs-work";
 }
 
 export interface UserSettings {
   theme: Theme;
-  language: 'en' | 'bn';
+  language: "en" | "bn";
   defaultCategory: Category;
   defaultMode: OptimizationMode;
   showHistory: boolean;
@@ -50,7 +70,7 @@ export interface UserSettings {
 }
 
 export interface AIProviderConfig {
-  provider: 'openai' | 'anthropic' | 'gemini';
+  provider: "openai" | "anthropic" | "gemini";
   apiKey: string;
   model: string;
 }
@@ -72,6 +92,16 @@ export interface OptimizationResult {
 export interface ToastMessage {
   id: string;
   message: string;
-  type: 'success' | 'error' | 'info';
+  type: "success" | "error" | "info";
   duration?: number;
 }
+
+export interface ClientProfile {
+  id: string;
+  name: string;
+  audience: string;
+  offer: string;
+  tone: string;
+  constraints: string;
+}
+export type WorkflowKind = "proposal" | "advertising" | "reply";

@@ -33,6 +33,6 @@ for (const [cat, target] of Object.entries(quotas)) {
   selected.push(...items);
 }
 
-console.log(`Selected ${selected.length} high-quality curated templates across categories.`);
+console.log(`Selected ${selected.length} screened imported templates across categories.`);
 fs.writeFileSync(outputPath, JSON.stringify(selected, null, 2), 'utf8');
 console.log(`Saved to ${outputPath}`);

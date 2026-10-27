@@ -15,11 +15,11 @@ const STEPS = [
   {
     icon: <MessageSquare />,
     title: 'In-Page AI Assistant',
-    description: 'A floating magic button appears on ChatGPT, Claude & Gemini. Click it to optimize and insert prompts directly into chat!',
+    description: 'A floating magic button appears on ChatGPT, Claude & Gemini. Click Improve prompt to replace your draft in the chat box. Review it before sending, or use Undo to restore it.',
   },
   {
     icon: <BookOpen />,
-    title: '200+ Curated Templates',
+    title: '200+ Built-in and Imported Templates',
     description: 'Explore 200+ templates for coding, education, writing, research, and business. Save your favorites for instant access.',
   },
   {

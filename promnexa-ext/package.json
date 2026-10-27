@@ -2,7 +2,7 @@
   "name": "promnexa",
   "description": "Turn ideas into better prompts. Premium AI prompt optimizer extension.",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.1",
   "type": "module",
   "scripts": {
     "dev": "wxt",
@@ -12,7 +12,7 @@
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/optimizer.test.ts tests/templates.test.ts tests/storage.test.ts",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
@@ -28,5 +28,8 @@
     "typescript": "^5.9.3",
     "web-ext": "^10.5.0",
     "wxt": "^0.21.3"
+  },
+  "engines": {
+    "node": ">=22.18.0"
   }
 }

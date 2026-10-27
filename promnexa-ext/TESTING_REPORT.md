@@ -1,93 +1,34 @@
-# Promnexa — Testing Report & Quality Audit
+# Promnexa 1.1.0 verification
 
-**Date:** October 12, 2026  
-**Version:** 1.0.0  
-**Test Suite:** Node 24 Native Test Runner (`node --test`) & Vite/Rolldown Bundler  
+Date: October 28, 2026.
 
----
+## Automated regression tests
+56 Node tests cover local optimization, explicit constraints, Bengali behavior, word-boundary classification, storage and concurrent writes, disabled history, secret-free backups, atomic invalid-import rejection, limits and legacy imports, client profiles, prompt revisions and feedback, variable filling, guided workflows, CSV parsing and template filtering. Provider tests mock the network and cover endpoint/credential handling, malformed responses, authentication failure and timeout abortion.
 
-## 1. Executive Summary
+Commands:
+```
+npm ci
+npm run compile
+npm test
+npm run build
+npm run build:firefox
+```
 
-All core functionality, optimization engines, data storage, template libraries, and production builds were systematically tested and verified.
+## Browser smoke tests
+`scripts/browser-smoke.cjs` uses Playwright and a separate headless Chrome process. Supply `PROMNEXA_PLAYWRIGHT` with a Playwright module location if it is not installed in the development environment, and optionally `PROMNEXA_CHROME` with a Chrome executable. Extension APIs and provider responses are mocked. The script exercises profiles, workflows, optimizer, revisions, feedback, immediate settings updates, history disablement, constrained prompts, lazy library and editable variables. It asserts no runtime errors or external network requests in local popup use. The floating assistant is tested against a simulated chat editor.
 
-- **Total Automated Unit Tests:** 25 passed / 0 failed (100% pass rate)
-- **Production Builds:**
-  - Chrome MV3: ✅ Success (`.output/chrome-mv3`, 492 kB unbundled, 147 kB zipped)
-  - Firefox MV2: ✅ Success (`.output/firefox-mv2`, 492 kB unbundled, 147 kB zipped)
-- **Type Checking:** ✅ Strict TypeScript passing without errors
+## Limits
+Mocked API tests do not establish live account/model availability or cost. Simulated composer tests do not establish compatibility with every live ChatGPT/Claude/Gemini/DeepSeek/Copilot/Grok/Perplexity editor. Firefox consent requires live Firefox verification. Automated validation does not establish improved downstream AI response quality or guarantee browser-store acceptance. Firefox lint may flag dynamic HTML rendering in sanitized content UI and React internals; those warnings require reviewer context.
 
----
 
-## 2. Unit Testing Breakdown
+## Dependency audit
+The initial audit found six affected development dependencies. Compatible updates were applied to the lockfile with `npm audit fix --ignore-scripts`. The final npm audit reports zero known vulnerabilities at audit time; this does not guarantee absence of undisclosed issues.
 
-### A. Optimizer & Classification Engine (`tests/optimizer.test.ts`)
-| Test Case | Status | Execution Time | Description |
-|-----------|--------|----------------|-------------|
-| Category Detection - Coding | Pass | 1.4 ms | Matches code, React, TypeScript, bugs |
-| Category Detection - Education | Pass | 0.9 ms | Matches exam, lecture, quantum mechanics |
-| Category Detection - Learning | Pass | 0.2 ms | Matches roadmap, beginner, skills |
-| Category Detection - Daily Life | Pass | 0.2 ms | Matches email, meeting, schedule |
-| Category Detection - Writing | Pass | 0.2 ms | Matches blog post, story, copywriting |
-| Category Detection - Research | Pass | 0.2 ms | Matches data, dataset, statistical |
-| Category Detection - Business | Pass | 0.2 ms | Matches startup, pitch deck, investor |
-| Category Detection - Fallback | Pass | 0.1 ms | Defaults to `general` gracefully |
-| Quick Mode Optimization | Pass | 0.7 ms | Clarifies objective concisely |
-| Deep Mode Optimization | Pass | 0.5 ms | Adds objective, context, guidelines |
-| Expert Mode Optimization | Pass | 0.3 ms | Introduces domain expert role & metrics |
-| Beginner Mode Optimization | Pass | 0.3 ms | Enforces accessible language & analogies |
-| Empty Prompt Edge Case | Pass | 0.1 ms | Gracefully handles whitespace input |
-| Very Long Prompt Edge Case | Pass | 0.2 ms | Handled 2000+ characters with code safely |
-| Multilingual & Unicode | Pass | 0.3 ms | Handled Bangla and Unicode symbols safely |
+## Firefox lint
+Zero errors. Three remaining warnings concern dynamic HTML assignment: one in the floating assistant (user-derived text is escaped) and two in bundled React internals. Desktop minimum is 140; Android minimum is 142. These require normal reviewer assessment rather than suppression.
 
-### B. Template Library Engine (`tests/templates.test.ts`)
-| Test Case | Status | Execution Time | Description |
-|-----------|--------|----------------|-------------|
-| Template Collection Size | Pass | 1.0 ms | Verifies >= 200 curated templates (235 active) |
-| Search by Keyword | Pass | 0.6 ms | Matches title, tags, and description |
-| Category Filter | Pass | 0.3 ms | Filters strictly to specified category |
-| Education Category | Pass | 0.2 ms | Academic templates verified |
-| Subcategories List | Pass | 0.3 ms | Subcategory generation verified |
-| Empty Search Fallback | Pass | 0.2 ms | Returns all active templates |
 
-### C. Data Storage & Schema (`tests/storage.test.ts`)
-| Test Case | Status | Execution Time | Description |
-|-----------|--------|----------------|-------------|
-| Settings Persistence | Pass | 2.1 ms | Theme, language, defaults read/write |
-| Saved Prompts CRUD | Pass | 0.8 ms | Creation, retrieval, favorite toggle, delete |
-| History Tracking | Pass | 0.4 ms | Add to history, clear history |
-| Export / Import Roundtrip | Pass | 1.5 ms | Validates full JSON backup & restore integrity |
+## Version 1.1.1 direct-chat verification
+The browser test additionally checks one-click replacement with no preview, exact whitespace restoration, keyboard activation and Alt+Shift+P, repeated-click protection, manual-edit and navigation guards, empty composers, stale previews, plain/rich text editors and zero form submissions. Rich-editor Undo snapshots the normalized text inserted by the browser so line-break normalization does not disable Undo incorrectly.
 
----
-
-## 3. Cross-Browser Build Verification
-
-| Platform | Manifest Version | Bundle Size | Package Path |
-|----------|------------------|-------------|--------------|
-| **Google Chrome / Chromium / Edge / Brave / Arc** | Manifest V3 | 147.55 kB (zip) | `.output/promnexa-1.0.0-chrome.zip` |
-| **Mozilla Firefox** | Manifest V2 | 147.55 kB (zip) | `.output/promnexa-1.0.0-firefox.zip` |
-| **Mozilla Reviewers Source Code** | Source Zip | 494.95 kB (zip) | `.output/promnexa-1.0.0-sources.zip` |
-
----
-
-## 4. Manual Installation & Testing Instructions
-
-### Google Chrome / Brave / Edge:
-1. Open `chrome://extensions/` (or `edge://extensions/`).
-2. Enable **Developer mode** toggle in the top-right corner.
-3. Click **Load unpacked**.
-4. Select the folder: `D:\Ayon\Promnexa\promnexa-ext\.output\chrome-mv3`.
-5. Promnexa icon will appear in the toolbar. Click it or press `Ctrl+Shift+P` to launch.
-
-### Mozilla Firefox:
-1. Open `about:debugging#/runtime/this-firefox`.
-2. Click **Load Temporary Add-on...**.
-3. Select `.output/firefox-mv2/manifest.json`.
-
----
-
-## 5. Known Limitations & Notes
-
-1. **Automated Browser Subagent in Sandbox:**
-   Automated Playwright browser subagent tests encountered an environment network error downloading the browser driver during build. Production extension bundles have been verified via unit tests and build linters.
-2. **AI Provider API Quotas:**
-   When using external AI models (OpenAI, Anthropic, Gemini), requests depend on the user's personal API key and billing quota. When quotas are exhausted or keys are invalid, Promnexa automatically displays a clear notification and falls back to the local offline optimization engine.
+GitHub delivery verification additionally checks and redacts credential-shaped examples in upstream prompt datasets. The importer applies the same redaction before future redistributions.

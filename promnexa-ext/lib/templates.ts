@@ -489,7 +489,7 @@ export function searchTemplates(
 ): PromptTemplate[] {
   let results = PROMPT_TEMPLATES;
 
-  if (category && category !== 'general') {
+  if (category) {
     results = results.filter(t => t.category === category);
   }
 
@@ -508,7 +508,6 @@ export function searchTemplates(
 
 // ---- Get Templates by Category ----
 export function getTemplatesByCategory(category: Category): PromptTemplate[] {
-  if (category === 'general') return PROMPT_TEMPLATES;
   return PROMPT_TEMPLATES.filter(t => t.category === category);
 }
 

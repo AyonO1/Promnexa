@@ -92,15 +92,11 @@ npm test
    - [DeepSeek](https://chat.deepseek.com)
    - [Perplexity](https://perplexity.ai)
    - [Microsoft Copilot](https://copilot.microsoft.com)
-2. You will see a sleek, purple floating **Promnexa** button in the bottom-right corner.
-3. Type your raw prompt idea into the chat box (e.g., *"help me fix my python code"*).
-4. Click the Promnexa button (or press `Alt+Shift+P`).
-5. Choose your mode:
-   - ⚡ **Quick:** Sharp, concise, unambiguous.
-   - 🔍 **Deep:** Detailed, structured with roles, objectives, and constraints.
-   - 🎓 **Expert:** High-level domain standards and edge case requirements.
-   - 🐣 **Beginner:** Clear analogies and step-by-step reasoning.
-6. Click **"✨ Insert into Chat"** — Promnexa replaces your rough prompt with the polished prompt instantly!
+2. Type your draft in the AI chat box.
+3. Click **Improve prompt** or press `Alt+Shift+P`. Promnexa replaces the draft directly using the local optimizer.
+4. Review the improved text, then press the AI site's **Send** button yourself. Promnexa never sends automatically.
+5. Click **Undo** to restore the exact original draft. Undo will not overwrite newer manual edits or a different conversation.
+6. Open **Options** for mode previews, copying, or an explicit request to your configured AI provider. Inserting a preview also supports Undo.
 
 ---
 
@@ -112,7 +108,7 @@ npm test
    - Click **Optimize Prompt**.
    - Use **"Open in ChatGPT"** or **"Open in Claude"** to immediately copy and launch your preferred AI in a new tab!
 3. **Library Screen:**
-   - Browse 200+ hand-crafted prompt templates across Coding, Education, Daily Life, Writing, Learning, Business, and Research.
+   - Browse 200+ built-in and imported prompt templates across Coding, Education, Daily Life, Writing, Learning, Business, and Research.
    - Filter by subcategories or search keywords.
    - Click **"Use Template"** to load it into the optimizer.
 4. **100% Offline & Private:**

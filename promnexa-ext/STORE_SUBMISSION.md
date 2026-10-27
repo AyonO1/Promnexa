@@ -1,121 +1,49 @@
-# Promnexa — Store Publication & Submission Guide
+# Promnexa 1.1.1 — Store submission
 
-This document contains all materials, descriptions, permission justifications, and release checklists required to submit **Promnexa — AI Prompt Optimizer** to the Chrome Web Store, Mozilla Add-ons (AMO), and Microsoft Edge Add-ons.
+## Listing
+Name: Promnexa — AI Prompt Optimizer
+Category: Productivity
+Summary: Create reusable prompts and bilingual client briefs with local tools or your own AI provider.
+Support: https://github.com/AyonO1/Promnexa/issues
+Privacy policy: publish the updated PRIVACY.md to main before submitting its GitHub URL.
 
----
+## Suggested description
+Promnexa is a free browser extension for reusable prompts and client work. Use local tools without an account, or connect your own OpenAI, Anthropic or Gemini API key. Provider usage may incur separate charges.
 
-## 1. Store Listing Metadata
+- Save client profiles and build proposal, advertising and reply briefs.
+- Choose English or Bengali workflow output.
+- Browse 235 built-in/imported templates and fill reusable variables.
+- Save prompt revisions and local usefulness feedback.
+- Improve a draft directly inside supported AI chat composers, review it before sending, and Undo the change. Options retains explicit optional AI requests.
+- Control local history, export backups without API keys, and clear local data.
+- Local mode has no telemetry, analytics or remote font requests.
 
-- **Extension Name:** Promnexa — AI Prompt Optimizer
-- **Short Name:** Promnexa
-- **Version:** 1.0.0
-- **Summary / Tagline (132 chars max):**  
-  `Turn ideas into better prompts. Transform simple, vague instructions into structured, high-performing AI prompts instantly.`
-- **Primary Category:** Productivity
-- **Secondary Category:** Developer Tools / Education
-- **Languages:** English, Bengali (বাংলা)
-- **Support URL:** https://github.com/AyonO1/Promnexa/issues
-- **Privacy Policy URL:** https://github.com/AyonO1/Promnexa/blob/main/promnexa-ext/PRIVACY.md
+There are no subscriptions, included AI credits or hosted team workspaces in this release. Some settings and in-page controls remain English. Prompt suggestions do not guarantee better downstream AI results.
 
----
+## Permissions and disclosures
+- storage: local preferences, API configuration, clients, saved prompts, revisions and history.
+- contextMenus: user-triggered actions on selected text.
+- activeTab: existing extension permission for active-tab actions.
+- Site matches: inject the floating assistant into the supported AI sites. The extension reads the composer when the user opens the assistant.
+- API hosts: only api.openai.com, api.anthropic.com and generativelanguage.googleapis.com; requests occur when users choose AI.
+- Firefox 140+/Android 142+: optional authenticationInfo, websiteContent and personalCommunications consent is required before AI transmission. Grant from the popup; local mode remains available without consent.
+- Keys are stored unencrypted in local extension storage and excluded from exports. Prompts/client context can be sent to the selected provider on explicit AI use.
 
-## 2. Store Description
+## Reviewer instructions
+1. Install the ZIP. Complete onboarding; no login or payment is required.
+2. Optimize a prompt locally. Try `write a haiku`: the constrained request is preserved.
+3. Open Workflows. Add a client and fill brief, audience and goal. Create a brief and save an optimized result.
+4. Open Saved. Create a revision and mark it Useful.
+5. Turn history off in Settings. New optimizations must not add history.
+6. Open Library, choose a template with variables, fill the fields and use it.
+7. Optional: configure your own test provider key. The provider may charge separately. Real API/model availability is account-dependent. In Firefox, grant optional consent on the first popup AI request. The in-page AI button then uses the same configuration.
+8. Review the source and TESTING_REPORT.md. Three Firefox HTML-assignment warnings remain: escaped content UI plus React internals.
 
-### Detailed Description
-
-```markdown
-Turn ideas into better prompts with Promnexa.
-
-Communicating effectively with AI shouldn't require learning complex prompt engineering formulas. Promnexa is a fast, beautifully designed browser extension that transforms simple, vague, or incomplete instructions into powerful, well-structured prompts tailored for ChatGPT, Claude, Gemini, and other AI models.
-
-✨ KEY FEATURES:
-
-🎯 4 SMART OPTIMIZATION MODES
-• Quick Optimize: Refines clarity and cuts fluff for concise, high-impact results.
-• Deep Optimize: Comprehensive structure with objective, context, edge-cases, and quality guidelines.
-• Expert Optimize: Introduces professional roles, technical requirements, and industry standards.
-• Beginner Optimize: Progressive, step-by-step prompts with accessible language and clear analogies.
-
-🧠 DUAL OPTIMIZATION ENGINES
-• 100% Offline Local Engine: Instant, deterministic prompt engineering with zero network calls, subscriptions, or accounts.
-• Optional AI-Powered Engine: Connect your own OpenAI, Anthropic Claude, or Google Gemini API keys for adaptive rewrites.
-
-📚 CURATED PROMPT LIBRARY (200+ TEMPLATES)
-• Hand-crafted templates across 8 essential categories:
-  - 🎓 Education (Thesis research, exam prep, lecture explanations, MCQs)
-  - 💻 Coding (Debugging, architecture, refactoring, security reviews)
-  - 📚 Learning (Roadmaps, Socratic tutoring, language practice)
-  - 📋 Daily Life & Productivity (Emails, travel planning, meeting agendas)
-  - ✍️ Writing & Content (Articles, storytelling, copywriting)
-  - 🔬 Research (Data analysis, literature review, methodology)
-  - 💼 Business (Strategy, pitch decks, client proposals)
-  - ✨ General Prompts
-
-⚡ DIRECT AI SITE INTEGRATION
-• Subtle floating Promnexa helper on ChatGPT, Claude, Gemini, Copilot, DeepSeek, and Perplexity.
-• One-click prompt enhancement without leaving your chat composer.
-
-🎨 LINEAR & RAYCAST INSPIRED DESIGN
-• Dark Charcoal and Warm Off-White themes with silky smooth animations.
-• Native keyboard shortcut support (Ctrl+Shift+P / Cmd+Shift+P).
-• Full privacy: no tracking, no telemetry, no silent uploads.
-```
-
----
-
-## 3. Permissions Disclosure & Justification
-
-| Permission | Requested Scope | Technical Justification |
-|------------|-----------------|-------------------------|
-| `storage` | `storage` | Necessary to locally save user preferences (dark/light theme, UI language, default mode), favorites, and optimization history. No data leaves the device. |
-| `contextMenus` | `contextMenus` | Adds right-click options ("Optimize with Promnexa", "Explain", "Summarize") when text is highlighted on any webpage. |
-| `activeTab` | `activeTab` | Allows inserting the user-approved optimized prompt back into the active AI chat composer when requested by the user. |
-
----
-
-## 4. Visual Assets Checklist
-
-- [x] **Extension Icons:**
-  - 16x16 px (`public/icon/16.png`)
-  - 32x32 px (`public/icon/32.png`)
-  - 48x48 px (`public/icon/48.png`)
-  - 96x96 px (`public/icon/96.png`)
-  - 128x128 px (`public/icon/128.png`)
-- [ ] **Promo Tiles (Prepared for upload):**
-  - Small Promo Tile: 440 x 280 px
-  - Marquee Promo Tile: 1400 x 560 px
-- [ ] **Screenshots (Minimum 1280 x 800 px or 640 x 400 px):**
-  - Screenshot 1: Optimize Screen with comparison view and improvements
-  - Screenshot 2: Prompt Library with category filters and search
-  - Screenshot 3: Saved Prompts & History
-  - Screenshot 4: Settings screen with theme toggle and AI provider config
-  - Screenshot 5: Light mode appearance
-
----
-
-## 5. Pre-Submission Verification Steps
-
-1. **Clean Production Build:**
-   ```bash
-   npm run build
-   npm run build:firefox
-   ```
-2. **Run All Unit Tests:**
-   ```bash
-   npm test
-   ```
-3. **Generate Release Zip Files:**
-   ```bash
-   npm run zip
-   npm run zip:firefox
-   ```
-   Outputs:
-   - `.output/promnexa-1.0.0-chrome.zip` (Chrome Web Store & Edge Add-ons)
-   - `.output/promnexa-1.0.0-firefox.zip` (Mozilla Add-ons)
-   - `.output/promnexa-1.0.0-sources.zip` (Source code for Mozilla Reviewers)
-
-4. **Security & Privacy Audit:**
-   - [x] No `eval` or remote executable code.
-   - [x] No hardcoded developer API secrets.
-   - [x] Content Security Policy complies with MV3 requirements.
-   - [x] Data collection notice provided in `PRIVACY.md`.
+## Before submitting
+- Upload the updated source, lockfile and privacy policy to the repository.
+- Run npm ci, npm run compile, npm test and both production builds.
+- Verify live provider calls and live supported-site insertion. These are not established by simulated browser tests.
+- Prepare current screenshots at store-required dimensions. Existing marketing assets should be reviewed for outdated claims.
+- Chrome/Edge package: `.output/promnexa-1.1.1-chrome.zip`.
+- Firefox package: `.output/promnexa-1.1.1-firefox.zip`; include `.output/promnexa-1.1.1-sources.zip` for reviewers.
+- Complete store privacy declarations accurately; store approval and Firefox signing remain pending.
