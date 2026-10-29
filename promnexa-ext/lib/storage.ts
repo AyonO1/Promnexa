@@ -1,3 +1,9 @@
+import {
+  restrictStorageAccess,
+  readCredential,
+  writeCredential,
+  clearCredentials,
+} from "./credentials.ts";
 import type { SavedPrompt, UserSettings, ClientProfile } from "./types";
 
 const STORAGE_KEYS = {
@@ -16,13 +22,13 @@ const CATEGORIES = [
   "business",
   "general",
 ];
-const MODES = ["quick", "deep", "expert", "beginner", "custom"];
+const MODES = ["quick", "deep", "expert", "beginner"];
 const DEFAULT_SETTINGS: UserSettings = {
   theme: "dark",
   language: "en",
   defaultCategory: "general",
   defaultMode: "quick",
-  showHistory: true,
+  showHistory: false,
   aiProvider: null,
   websiteIntegrations: [
     "chatgpt.com",
@@ -34,6 +40,8 @@ const DEFAULT_SETTINGS: UserSettings = {
     "grok.com",
   ].map((site) => ({ site, enabled: true })),
   keyboardShortcut: "Ctrl+Shift+P",
+  inlineShortcut: "Alt+Shift+P",
+  maxAiInputCharacters: 20000,
   onboardingComplete: false,
 };
 const object = (v: unknown): v is Record<string, any> =>
@@ -56,11 +64,17 @@ function validateSettings(v: unknown): Partial<UserSettings> {
         valid = CATEGORIES.includes(value);
         break;
       case "defaultMode":
-        valid = MODES.includes(value);
+        valid = MODES.includes(value) || value === "custom";
         break;
       case "showHistory":
       case "onboardingComplete":
         valid = typeof value === "boolean";
+        break;
+      case "inlineShortcut":
+        valid = ["Alt+Shift+P", "Alt+Shift+O", "Ctrl+Alt+P"].includes(value);
+        break;
+      case "maxAiInputCharacters":
+        valid = Number.isInteger(value) && value >= 1000 && value <= 100000;
         break;
       case "keyboardShortcut":
         valid = str(value, 80);
@@ -71,7 +85,9 @@ function validateSettings(v: unknown): Partial<UserSettings> {
           (object(value) &&
             ["openai", "anthropic", "gemini"].includes(value.provider) &&
             str(value.apiKey, 2048) &&
-            str(value.model, 150));
+            str(value.model, 150) &&
+            (value.rememberApiKey === undefined ||
+              typeof value.rememberApiKey === "boolean"));
         break;
       case "websiteIntegrations":
         valid =
@@ -86,7 +102,19 @@ function validateSettings(v: unknown): Partial<UserSettings> {
         continue;
     }
     if (!valid) throw new Error(`Invalid setting: ${key}`);
-    out[key] = value;
+    out[key] =
+      key === "aiProvider" && value
+        ? {
+            provider: value.provider,
+            model: value.model,
+            apiKey: value.apiKey,
+            rememberApiKey: value.rememberApiKey === true,
+          }
+        : key === "websiteIntegrations"
+          ? value.map((i: any) => ({ site: i.site, enabled: i.enabled }))
+          : key === "defaultMode" && value === "custom"
+            ? "quick"
+            : value;
   }
   return out as Partial<UserSettings>;
 }
@@ -103,7 +131,7 @@ function validatePrompts(v: unknown, limit: number): SavedPrompt[] {
       !str(p.original) ||
       !str(p.optimized) ||
       !CATEGORIES.includes(p.category) ||
-      !MODES.includes(p.mode) ||
+      (!MODES.includes(p.mode) && p.mode !== "custom") ||
       typeof p.isFavorite !== "boolean" ||
       !Number.isFinite(p.createdAt) ||
       p.createdAt < 0
@@ -115,7 +143,7 @@ function validatePrompts(v: unknown, limit: number): SavedPrompt[] {
       original: p.original,
       optimized: p.optimized,
       category: p.category,
-      mode: p.mode,
+      mode: p.mode === "custom" ? "quick" : p.mode,
       isFavorite: p.isFavorite,
       createdAt: p.createdAt,
     };
@@ -168,24 +196,90 @@ function mutate<T>(fn: () => Promise<T>): Promise<T> {
 }
 export async function getSettings(): Promise<UserSettings> {
   const result = await browser.storage.local.get(STORAGE_KEYS.settings);
+  let settings: UserSettings;
   try {
-    return {
+    settings = {
       ...structuredClone(DEFAULT_SETTINGS),
       ...validateSettings(result[STORAGE_KEYS.settings] || {}),
     };
   } catch {
-    return structuredClone(DEFAULT_SETTINGS);
+    settings = structuredClone(DEFAULT_SETTINGS);
   }
+  if (settings.aiProvider) {
+    const config = settings.aiProvider;
+    settings.aiProvider = {
+      ...config,
+      apiKey: (await readCredential(config.provider)) || config.apiKey,
+      rememberApiKey: config.rememberApiKey ?? false,
+    };
+  }
+  return settings;
 }
 export function saveSettings(settings: Partial<UserSettings>): Promise<void> {
   const valid = validateSettings(settings);
   return mutate(async () => {
-    const current = await getSettings();
+    const next = { ...(await getSettings()), ...valid };
+    await writeCredential(next.aiProvider);
+    const publicSettings = {
+      ...next,
+      aiProvider: next.aiProvider ? { ...next.aiProvider, apiKey: "" } : null,
+    };
     await browser.storage.local.set({
-      [STORAGE_KEYS.settings]: { ...current, ...valid },
+      [STORAGE_KEYS.settings]: publicSettings,
     });
   });
 }
+export async function initializeStoragePrivacy(): Promise<void> {
+  await restrictStorageAccess();
+  const data = await browser.storage.local.get(STORAGE_KEYS.settings);
+  if ((data[STORAGE_KEYS.settings] as any)?.aiProvider?.apiKey) {
+    await saveSettings({});
+    await browser.storage.local.set({ promnexa_credential_notice: true });
+  }
+}
+export async function getPublicSettings() {
+  const s = await getSettings();
+  return {
+    websiteIntegrations: s.websiteIntegrations,
+    defaultMode: s.defaultMode,
+    inlineShortcut: s.inlineShortcut,
+    language: s.language,
+    hasAiProvider: !!s.aiProvider?.apiKey,
+    maxAiInputCharacters: s.maxAiInputCharacters,
+  };
+}
+export const STORAGE_BUDGET = {
+  saved: 4 * 1024 * 1024,
+  history: 2 * 1024 * 1024,
+  clients: 2 * 1024 * 1024,
+  total: 8 * 1024 * 1024,
+};
+export const storedBytes = (value: unknown) =>
+  new TextEncoder().encode(JSON.stringify(value)).length;
+function enforceBudget(value: unknown, limit: number, label: string) {
+  if (storedBytes(value) > limit)
+    throw new Error(
+      `${label} storage budget exceeded. Export and remove older items before saving.`,
+    );
+}
+export async function getStorageUsage() {
+  if (browser.storage.local.getBytesInUse) {
+    const [bytes, saved, history] = await Promise.all([
+      browser.storage.local.getBytesInUse(null),
+      browser.storage.local.getBytesInUse(STORAGE_KEYS.saved),
+      browser.storage.local.getBytesInUse(STORAGE_KEYS.history),
+    ]);
+    return { bytes, budget: STORAGE_BUDGET.total, saved, history };
+  }
+  const all = await browser.storage.local.get(null);
+  return {
+    bytes: storedBytes(all),
+    budget: STORAGE_BUDGET.total,
+    saved: storedBytes(all[STORAGE_KEYS.saved] || []),
+    history: storedBytes(all[STORAGE_KEYS.history] || []),
+  };
+}
+
 async function readPrompts(key: string, limit: number): Promise<SavedPrompt[]> {
   const result = await browser.storage.local.get(key);
   return validatePrompts(result[key] || [], limit);
@@ -193,15 +287,16 @@ async function readPrompts(key: string, limit: number): Promise<SavedPrompt[]> {
 export const getSavedPrompts = () => readPrompts(STORAGE_KEYS.saved, 500);
 export const getHistory = () => readPrompts(STORAGE_KEYS.history, 100);
 export function savePrompt(prompt: SavedPrompt): Promise<void> {
-  validatePrompts([prompt], 1);
+  prompt = validatePrompts([prompt], 1)[0]!;
   return mutate(async () => {
     const saved = await getSavedPrompts();
-    await browser.storage.local.set({
-      [STORAGE_KEYS.saved]: [
-        prompt,
-        ...saved.filter((p) => p.id !== prompt.id),
-      ].slice(0, 500),
-    });
+    const next = [prompt, ...saved.filter((p) => p.id !== prompt.id)];
+    if (next.length > 500)
+      throw new Error(
+        "Saved prompt limit reached. Export and remove older items first.",
+      );
+    enforceBudget(next, STORAGE_BUDGET.saved, "Saved prompts");
+    await browser.storage.local.set({ [STORAGE_KEYS.saved]: next });
   });
 }
 export function deleteSavedPrompt(id: string): Promise<void> {
@@ -226,16 +321,18 @@ export function toggleFavorite(id: string): Promise<void> {
 export async function getFavorites(): Promise<SavedPrompt[]> {
   return (await getSavedPrompts()).filter((p) => p.isFavorite);
 }
-export function addToHistory(prompt: SavedPrompt): Promise<void> {
+export function addToHistory(
+  prompt: SavedPrompt,
+): Promise<{ saved: boolean; evicted: number }> {
   validatePrompts([prompt], 1);
   return mutate(async () => {
-    if (!(await getSettings()).showHistory) return;
-    await browser.storage.local.set({
-      [STORAGE_KEYS.history]: [
-        prompt,
-        ...(await getHistory()).filter((p) => p.id !== prompt.id),
-      ].slice(0, 100),
-    });
+    if (!(await getSettings()).showHistory) return { saved: false, evicted: 0 };
+    enforceBudget([prompt], STORAGE_BUDGET.history, "History entry");
+    const old = (await getHistory()).filter((p) => p.id !== prompt.id);
+    const next = [prompt, ...old].slice(0, 100);
+    while (storedBytes(next) > STORAGE_BUDGET.history) next.pop();
+    await browser.storage.local.set({ [STORAGE_KEYS.history]: next });
+    return { saved: true, evicted: Math.max(0, old.length + 1 - next.length) };
   });
 }
 export const clearHistory = () =>
@@ -252,6 +349,7 @@ export function saveClient(client: ClientProfile): Promise<void> {
     const clients = await getClients();
     const next = [client, ...clients.filter((c) => c.id !== client.id)];
     validateClients(next);
+    enforceBudget(next, STORAGE_BUDGET.clients, "Client profiles");
     await browser.storage.local.set({ [STORAGE_KEYS.clients]: next });
   });
 }
@@ -265,7 +363,11 @@ export async function exportData(): Promise<string> {
   const settings = await getSettings();
   // Secrets never belong in portable backups.
   if (settings.aiProvider)
-    settings.aiProvider = { ...settings.aiProvider, apiKey: "" };
+    settings.aiProvider = {
+      ...settings.aiProvider,
+      apiKey: "",
+      rememberApiKey: false,
+    };
   return JSON.stringify(
     {
       version: 2,
@@ -282,8 +384,8 @@ export async function exportData(): Promise<string> {
 export async function importData(
   jsonString: string,
 ): Promise<{ saved: number; history: number }> {
-  if (jsonString.length > 5_000_000)
-    throw new Error("Backup must be smaller than 5 MB.");
+  if (new TextEncoder().encode(jsonString).length > 12 * 1024 * 1024)
+    throw new Error("Backup must be smaller than 12 MiB.");
   const data: unknown = JSON.parse(jsonString);
   if (
     !object(data) ||
@@ -302,7 +404,15 @@ export async function importData(
   const settings =
     data.settings === undefined ? undefined : validateSettings(data.settings);
   if (settings?.aiProvider)
-    settings.aiProvider = { ...settings.aiProvider, apiKey: "" };
+    settings.aiProvider = {
+      ...settings.aiProvider,
+      apiKey: "",
+      rememberApiKey: false,
+    };
+  if (saved) enforceBudget(saved, STORAGE_BUDGET.saved, "Saved prompts");
+  if (history) enforceBudget(history, STORAGE_BUDGET.history, "History");
+  if (clients)
+    enforceBudget(clients, STORAGE_BUDGET.clients, "Client profiles");
   await mutate(async () => {
     const updates: Record<string, unknown> = {};
     if (saved) updates[STORAGE_KEYS.saved] = saved;
@@ -313,12 +423,14 @@ export async function importData(
         ...(await getSettings()),
         ...settings,
       };
+    if (settings && "aiProvider" in settings) await writeCredential(null);
     await browser.storage.local.set(updates);
   });
   return { saved: saved?.length || 0, history: history?.length || 0 };
 }
 export const clearAllData = () =>
   mutate(async () => {
+    await clearCredentials();
     await browser.storage.local.clear();
   });
 

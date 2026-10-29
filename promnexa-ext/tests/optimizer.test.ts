@@ -56,30 +56,34 @@ test("Category Detection - Fallback to General", () => {
   assert.equal(result, "general");
 });
 
-test("Optimizer - Quick Mode produces clear objective", () => {
+test("Optimizer - Quick preserves the task and adds learning-specific guidance", () => {
   const res = optimizePrompt("Teach me machine learning", "learning", "quick");
   assert.equal(res.mode, "quick");
-  assert.ok(res.optimized.includes("Objective"));
+  assert.ok(res.optimized.startsWith(res.original));
+  assert.ok(!res.optimized.includes("##"));
   assert.ok(res.improvements.length > 0);
 });
 
-test("Optimizer - Deep Mode adds structured sections", () => {
+test("Optimizer - Deep requests debugging evidence without inventing it", () => {
   const res = optimizePrompt("Fix my React code", "coding", "deep");
   assert.equal(res.mode, "deep");
-  assert.ok(res.optimized.includes("Objective"));
-  assert.ok(res.optimized.includes("Context"));
-  assert.ok(res.optimized.includes("Quality Guidelines"));
+  assert.ok(res.optimized.startsWith("Fix my React code"));
+  assert.ok(res.optimized.includes("missing evidence"));
+  assert.ok(res.questions?.some((q) => q.includes("code and error")));
 });
 
-test("Optimizer - Expert Mode adds domain role and standards", () => {
+test("Optimizer - Expert preserves architecture intent and adds verification", () => {
   const res = optimizePrompt(
     "Design a high-throughput microservice architecture",
     "coding",
     "expert",
   );
   assert.equal(res.mode, "expert");
-  assert.ok(res.optimized.includes("expert"));
-  assert.ok(res.optimized.includes("Expected Output"));
+  assert.ok(
+    res.optimized.includes("high-throughput microservice architecture"),
+  );
+  assert.ok(res.optimized.includes("failure modes"));
+  assert.ok(res.optimized.includes("verified"));
 });
 
 test("Optimizer - Beginner Mode enforces accessible language", () => {
@@ -152,3 +156,61 @@ test("Short explicit writing task does not receive an outline", () => {
 });
 test("Oversize prompts are rejected", () =>
   assert.throws(() => optimizePrompt("x".repeat(100001), "general", "quick")));
+
+for (const input of [
+  "Never use markdown; answer in plain text",
+  "Answer in one sentence: what is TCP?",
+  "Explain in at most 20 words",
+  "No headings: explain DNS",
+  "Return only CSV rows",
+  "Return only a regex",
+  "Translate exactly: hello",
+])
+  test(`Review constraint: ${input}`, () => {
+    const result = optimizePrompt(input, detectCategory(input), "expert");
+    assert.ok(result.optimized.includes(input));
+    assert.ok(!result.optimized.includes("##"));
+    assert.equal(result.status, "unchanged");
+    assert.ok(result.improvements.length);
+  });
+test("Poetry with a subject can be improved without changing form", () => {
+  const input = "write a poem about rain";
+  const r = optimizePrompt(input, "writing", "deep");
+  assert.ok(r.optimized.startsWith(input));
+  assert.notEqual(r.optimized, input);
+  assert.ok(!r.optimized.includes("##"));
+});
+test("Debugging guidance preserves fenced code byte-for-byte", () => {
+  const code = "```python\ndef broken(x):\n    return x / 0\n```";
+  const input = "Fix this code: " + code;
+  const r = optimizePrompt(input, "coding", "expert");
+  assert.ok(r.optimized.includes(code));
+  assert.notEqual(r.optimized, input);
+  assert.ok(r.optimized.includes("focused test"));
+});
+test("Review technical examples classify correctly and avoid generic headings", () => {
+  for (const input of [
+    "What is TCP three way handshake?",
+    "Explain why the program fails",
+  ])
+    assert.equal(detectCategory(input), "coding");
+  const r = optimizePrompt(
+    "What is TCP three way handshake?",
+    "coding",
+    "quick",
+  );
+  assert.ok(r.optimized.includes("SYN-ACK"));
+  assert.ok(!r.optimized.includes("##"));
+});
+test("Bengali and Banglish learning prompts receive relevant guidance", () => {
+  for (const input of ["আমাকে Javascript শেখাও", "amake JavaScript shekhao"]) {
+    assert.equal(detectCategory(input), "learning");
+    const r = optimizePrompt(input, "learning", "quick");
+    assert.ok(r.optimized.startsWith(input));
+    assert.ok(
+      r.optimized.includes(
+        input.includes("আমাকে") ? "উদাহরণ" : "practical example",
+      ),
+    );
+  }
+});

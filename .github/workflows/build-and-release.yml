@@ -41,11 +41,19 @@ jobs:
           cd promnexa-ext
           npm test
 
+      - name: Check local preservation benchmark
+        run: npm --prefix promnexa-ext run benchmark
+
       - name: Build Chrome & Firefox Extensions
         run: |
           cd promnexa-ext
           npm run build
           npm run build:firefox
+
+      - name: Test built background privacy and context actions
+        run: |
+          cd promnexa-ext
+          npm run test:background
 
       - name: Package Distribution ZIPs
         run: |

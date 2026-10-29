@@ -1,4 +1,4 @@
-import {redactCredentialPatterns} from '../scripts/prompt-safety.mjs';
+import { redactCredentialPatterns } from "../scripts/prompt-safety.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -79,8 +79,14 @@ test("General category filter returns general only", () =>
     searchTemplates("", "general").every((t) => t.category === "general"),
   ));
 
-test('Imported credential-shaped samples are redacted before redistribution',()=>{
-  const sample='API_KEY='+'ghp_'+'a'.repeat(36);
-  assert.equal(redactCredentialPatterns(sample),'API_KEY=[REDACTED_CREDENTIAL]');
-  assert.equal(redactCredentialPatterns('Use your own API key'),'Use your own API key');
+test("Imported credential-shaped samples are redacted before redistribution", () => {
+  const sample = "API_KEY=" + "ghp_" + "a".repeat(36);
+  assert.equal(
+    redactCredentialPatterns(sample),
+    "API_KEY=[REDACTED_CREDENTIAL]",
+  );
+  assert.equal(
+    redactCredentialPatterns("Use your own API key"),
+    "Use your own API key",
+  );
 });

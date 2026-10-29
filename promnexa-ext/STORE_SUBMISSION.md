@@ -1,4 +1,4 @@
-# Promnexa 1.1.1 — Store submission
+# Promnexa 1.2.0 — Store submission
 
 ## Listing
 Name: Promnexa — AI Prompt Optimizer
@@ -10,12 +10,12 @@ Privacy policy: publish the updated PRIVACY.md to main before submitting its Git
 ## Suggested description
 Promnexa is a free browser extension for reusable prompts and client work. Use local tools without an account, or connect your own OpenAI, Anthropic or Gemini API key. Provider usage may incur separate charges.
 
-- Save client profiles and build proposal, advertising and reply briefs.
+- Save client profiles and build proposal, advertising and reply briefs. Compare actual text changes and saved versions.
 - Choose English or Bengali workflow output.
 - Browse 235 built-in/imported templates and fill reusable variables.
 - Save prompt revisions and local usefulness feedback.
 - Improve a draft directly inside supported AI chat composers, review it before sending, and Undo the change. Options retains explicit optional AI requests.
-- Control local history, export backups without API keys, and clear local data.
+- Opt into local history, review storage usage, export backups without configured API keys, and clear local data.
 - Local mode has no telemetry, analytics or remote font requests.
 
 There are no subscriptions, included AI credits or hosted team workspaces in this release. Some settings and in-page controls remain English. Prompt suggestions do not guarantee better downstream AI results.
@@ -27,7 +27,7 @@ There are no subscriptions, included AI credits or hosted team workspaces in thi
 - Site matches: inject the floating assistant into the supported AI sites. The extension reads the composer when the user opens the assistant.
 - API hosts: only api.openai.com, api.anthropic.com and generativelanguage.googleapis.com; requests occur when users choose AI.
 - Firefox 140+/Android 142+: optional authenticationInfo, websiteContent and personalCommunications consent is required before AI transmission. Grant from the popup; local mode remains available without consent.
-- Keys are stored unencrypted in local extension storage and excluded from exports. Prompts/client context can be sent to the selected provider on explicit AI use.
+- Keys are session-only by default and excluded from exports. An explicit Remember choice stores keys unencrypted locally. Chrome trusted-context restrictions and sanitized settings messages reduce content-script exposure. Prompts/client context can be sent to the selected provider on explicit AI use.
 
 ## Reviewer instructions
 1. Install the ZIP. Complete onboarding; no login or payment is required.
@@ -44,6 +44,8 @@ There are no subscriptions, included AI credits or hosted team workspaces in thi
 - Run npm ci, npm run compile, npm test and both production builds.
 - Verify live provider calls and live supported-site insertion. These are not established by simulated browser tests.
 - Prepare current screenshots at store-required dimensions. Existing marketing assets should be reviewed for outdated claims.
-- Chrome/Edge package: `.output/promnexa-1.1.1-chrome.zip`.
-- Firefox package: `.output/promnexa-1.1.1-firefox.zip`; include `.output/promnexa-1.1.1-sources.zip` for reviewers.
+- Chrome/Edge package: `.output/promnexa-1.2.0-chrome.zip`.
+- Firefox package: `.output/promnexa-1.2.0-firefox.zip`; include `.output/promnexa-1.2.0-sources.zip` for reviewers.
 - Complete store privacy declarations accurately; store approval and Firefox signing remain pending.
+
+This is an unpublished 1.2.0 review candidate. Read REVIEW_RESPONSE.md before describing the changes publicly. The sensitive-information scanner is heuristic, not a guarantee; local preservation invariants are not downstream quality scores.

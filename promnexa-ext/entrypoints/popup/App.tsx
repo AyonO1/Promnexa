@@ -41,6 +41,24 @@ export default function App() {
 
   const t = getT(language);
 
+  React.useEffect(() => {
+    const showNotice = () => {
+      addToast(
+        "Your API key is now session-only. Re-enter it after restarting the browser, or enable Remember in Settings.",
+        "info",
+      );
+      void browser.storage.local.remove("promnexa_credential_notice");
+    };
+    browser.storage.local.get("promnexa_credential_notice").then((data) => {
+      if (data.promnexa_credential_notice) showNotice();
+    });
+    const noticeListener = (changes: Record<string, any>, area: string) => {
+      if (area === "local" && changes.promnexa_credential_notice?.newValue)
+        showNotice();
+    };
+    browser.storage.onChanged.addListener(noticeListener);
+    return () => browser.storage.onChanged.removeListener(noticeListener);
+  }, [addToast]);
   // Load settings on mount
   React.useEffect(() => {
     getSettings().then((s) => {
@@ -57,7 +75,10 @@ export default function App() {
 
   React.useEffect(() => {
     const listener = (changes: Record<string, unknown>, area: string) => {
-      if (area === "local" && changes.promnexa_settings) {
+      if (
+        (area === "local" && changes.promnexa_settings) ||
+        changes.promnexa_credentials
+      ) {
         getSettings().then((s) => {
           setSettings(s);
           setTheme(s.theme);
@@ -177,6 +198,7 @@ export default function App() {
             defaultCategory={settings?.defaultCategory || "general"}
             defaultMode={settings?.defaultMode || "quick"}
             aiProvider={settings?.aiProvider || null}
+            maxAiInputCharacters={settings.maxAiInputCharacters}
             language={language}
             initialInput={initialPrompt?.text}
             initialCategory={initialPrompt?.category}

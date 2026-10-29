@@ -1,0 +1,73 @@
+[
+  {
+    "id": "plain",
+    "input": "Never use markdown; answer in plain text",
+    "category": "general",
+    "noNewMarkdown": true
+  },
+  {
+    "id": "length",
+    "input": "Explain TCP in exactly 20 words",
+    "category": "coding",
+    "noNewMarkdown": true
+  },
+  {
+    "id": "json",
+    "input": "Return only valid JSON with keys name and age.",
+    "category": "general",
+    "noNewMarkdown": true
+  },
+  {
+    "id": "csv",
+    "input": "Return only CSV rows with columns name, age",
+    "category": "general",
+    "noNewMarkdown": true
+  },
+  {
+    "id": "regex",
+    "input": "Return only a regex matching lowercase letters",
+    "category": "coding",
+    "noNewMarkdown": true
+  },
+  {
+    "id": "poem",
+    "input": "write a poem about rain",
+    "category": "writing",
+    "noNewMarkdown": true
+  },
+  {
+    "id": "code",
+    "input": "Fix this code: ```python\ndef broken(x):\n    return x / 0\n```",
+    "category": "coding",
+    "protected": "```python\ndef broken(x):\n    return x / 0\n```"
+  },
+  {
+    "id": "bangla",
+    "input": "আমাকে Javascript শেখাও",
+    "category": "learning",
+    "noNewMarkdown": true
+  },
+  {
+    "id": "banglish",
+    "input": "amake JavaScript shekhao",
+    "category": "learning",
+    "noNewMarkdown": true
+  },
+  {
+    "id": "handshake",
+    "input": "What is TCP three way handshake?",
+    "category": "coding",
+    "noNewMarkdown": true
+  },
+  {
+    "id": "verbatim",
+    "input": "Translate exactly: hello",
+    "category": "general",
+    "unchanged": true
+  },
+  {
+    "id": "long",
+    "input": "Explain the failure in this supplied log. timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout timeout ",
+    "category": "coding"
+  }
+]

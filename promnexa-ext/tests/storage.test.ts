@@ -10,6 +10,7 @@ const mockStorage: Record<string, any> = {};
         if (typeof key === "string") {
           return { [key]: mockStorage[key] };
         }
+        if (key === null) return structuredClone(mockStorage);
         const res: Record<string, any> = {};
         for (const k of key) res[k] = mockStorage[k];
         return res;
@@ -37,6 +38,11 @@ import {
   exportData,
   importData,
   clearAllData,
+  initializeStoragePrivacy,
+  getPublicSettings,
+  STORAGE_BUDGET,
+  storedBytes,
+  getStorageUsage,
   getClients,
   saveClient,
   saveRevision,
@@ -80,6 +86,7 @@ test("Storage - Save, Retrieve, and Toggle Favorite Prompt", async () => {
 });
 
 test("Storage - History Addition and Clear", async () => {
+  await saveSettings({ showHistory: true });
   const histItem = {
     id: "hist-1",
     original: "Query",
@@ -235,4 +242,169 @@ test("Revisions preserve the parent and store local feedback", async () => {
   assert.ok((await getSavedPrompts()).some((p) => p.id === parent.id));
   await recordFeedback(revised.id, "useful");
   assert.equal((await getSavedPrompts())[0]?.feedback, "useful");
+});
+
+test("New installations default to no stored history", async () => {
+  await clearAllData();
+  assert.equal((await getSettings()).showHistory, false);
+});
+test("Credentials are separate from settings and public replies", async () => {
+  await saveSettings({
+    aiProvider: { provider: "openai", model: "test", apiKey: "session-secret" },
+  });
+  assert.equal(mockStorage.promnexa_settings.aiProvider.apiKey, "");
+  assert.equal(mockStorage.promnexa_credentials, null);
+  assert.equal((await getSettings()).aiProvider?.apiKey, "session-secret");
+  assert.ok(
+    !JSON.stringify(await getPublicSettings()).includes("session-secret"),
+  );
+});
+test("Device credentials require explicit remember choice", async () => {
+  await saveSettings({
+    aiProvider: {
+      provider: "openai",
+      model: "test",
+      apiKey: "device-secret",
+      rememberApiKey: true,
+    },
+  });
+  assert.equal(mockStorage.promnexa_credentials.apiKey, "device-secret");
+  await saveSettings({
+    aiProvider: { provider: "openai", model: "test", apiKey: "session-secret" },
+  });
+  assert.equal(mockStorage.promnexa_credentials, null);
+});
+test("Legacy secrets migrate out of general settings", async () => {
+  await clearAllData();
+  mockStorage.promnexa_settings = {
+    aiProvider: {
+      provider: "openai",
+      apiKey: "legacy-device-secret",
+      model: "test",
+    },
+  };
+  await initializeStoragePrivacy();
+  assert.equal(mockStorage.promnexa_settings.aiProvider.apiKey, "");
+  assert.equal(
+    (await getSettings()).aiProvider?.apiKey,
+    "legacy-device-secret",
+  );
+});
+test("History evicts older records by UTF-8 bytes", async () => {
+  await clearAllData();
+  await saveSettings({ showHistory: true });
+  let evicted = 0;
+  for (let i = 0; i < 8; i++) {
+    const result = await addToHistory({
+      id: `bytes-${i}`,
+      original: "ক".repeat(100000),
+      optimized: "ক".repeat(100000),
+      category: "general",
+      mode: "quick",
+      isFavorite: false,
+      createdAt: i,
+    });
+    evicted += result.evicted;
+  }
+  assert.ok(evicted > 0);
+  assert.ok(storedBytes(await getHistory()) <= STORAGE_BUDGET.history);
+  assert.equal((await getHistory())[0]?.id, "bytes-7");
+});
+test("Oversize saved/import payloads fail before losing stored prompts", async () => {
+  await clearAllData();
+  for (let i = 0; i < 6; i++)
+    await savePrompt({
+      id: `saved-${i}`,
+      original: "ক".repeat(100000),
+      optimized: "ক".repeat(100000),
+      category: "general",
+      mode: "quick",
+      isFavorite: true,
+      createdAt: i,
+    });
+  const before = JSON.stringify(mockStorage);
+  await assert.rejects(
+    savePrompt({
+      id: "overflow",
+      original: "ক".repeat(100000),
+      optimized: "ক".repeat(100000),
+      category: "general",
+      mode: "quick",
+      isFavorite: true,
+      createdAt: 8,
+    }),
+    /budget/,
+  );
+  assert.equal(JSON.stringify(mockStorage), before);
+  await assert.rejects(
+    importData(
+      JSON.stringify({
+        saved: [],
+        history: Array.from({ length: 8 }, (_, i) => ({
+          id: `imp-${i}`,
+          original: "ক".repeat(100000),
+          optimized: "ক".repeat(100000),
+          category: "general",
+          mode: "quick",
+          isFavorite: false,
+          createdAt: i,
+        })),
+      }),
+    ),
+    /budget/,
+  );
+  assert.equal(JSON.stringify(mockStorage), before);
+});
+test("Legacy custom mode imports migrate to Quick", async () => {
+  await importData(
+    JSON.stringify({
+      settings: { defaultMode: "custom" },
+      saved: [
+        {
+          id: "legacy-custom",
+          original: "a",
+          optimized: "b",
+          category: "general",
+          mode: "custom",
+          isFavorite: true,
+          createdAt: 1,
+        },
+      ],
+    }),
+  );
+  assert.equal((await getSettings()).defaultMode, "quick");
+  assert.equal((await getSavedPrompts())[0]?.mode, "quick");
+});
+
+test("Chrome storage policy and session credentials are enforced when supported", async (t) => {
+  await clearAllData();
+  const local: any = (globalThis as any).browser.storage.local;
+  const storage: any = (globalThis as any).browser.storage;
+  let access = "";
+  const session: Record<string, unknown> = {};
+  local.setAccessLevel = async ({ accessLevel }: { accessLevel: string }) => {
+    access = accessLevel;
+  };
+  storage.session = {
+    get: async (key: string) => ({ [key]: session[key] }),
+    set: async (values: Record<string, unknown>) =>
+      Object.assign(session, values),
+    remove: async (key: string) => {
+      delete session[key];
+    },
+  };
+  t.after(() => {
+    delete local.setAccessLevel;
+    delete storage.session;
+  });
+  await initializeStoragePrivacy();
+  assert.equal(access, "TRUSTED_CONTEXTS");
+  await saveSettings({
+    aiProvider: { provider: "gemini", apiKey: "ephemeral-only", model: "test" },
+  });
+  assert.equal((session.promnexa_credentials as any).apiKey, "ephemeral-only");
+  assert.equal(mockStorage.promnexa_credentials, null);
+  assert.equal((await getSettings()).aiProvider?.apiKey, "ephemeral-only");
+  await clearAllData();
+  assert.equal(session.promnexa_credentials, undefined);
 });

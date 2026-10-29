@@ -18,16 +18,11 @@ export type Category =
   | "business"
   | "general";
 
-export type OptimizationMode =
-  | "quick"
-  | "deep"
-  | "expert"
-  | "beginner"
-  | "custom";
+export type OptimizationMode = "quick" | "deep" | "expert" | "beginner";
 
 export type SavedTab = "favorites" | "history" | "templates";
 
-export type ComparisonView = "optimized" | "original";
+export type ComparisonView = "optimized" | "original" | "changes";
 
 export interface PromptTemplate {
   id: string;
@@ -66,6 +61,8 @@ export interface UserSettings {
   aiProvider: AIProviderConfig | null;
   websiteIntegrations: WebsiteIntegration[];
   keyboardShortcut: string;
+  inlineShortcut: string;
+  maxAiInputCharacters: number;
   onboardingComplete: boolean;
 }
 
@@ -73,6 +70,7 @@ export interface AIProviderConfig {
   provider: "openai" | "anthropic" | "gemini";
   apiKey: string;
   model: string;
+  rememberApiKey?: boolean;
 }
 
 export interface WebsiteIntegration {
@@ -87,6 +85,11 @@ export interface OptimizationResult {
   mode: OptimizationMode;
   improvements: string[];
   timestamp: number;
+  engine?: "local" | "ai";
+  fallbackReason?: string;
+  status?: "improved" | "unchanged";
+  questions?: string[];
+  protectedConstraints?: string[];
 }
 
 export interface ToastMessage {

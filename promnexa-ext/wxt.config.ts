@@ -16,7 +16,7 @@ export default defineConfig({
     name: "Promnexa — AI Prompt Optimizer",
     description:
       "Turn ideas into better prompts. Create reusable prompts and bilingual client briefs with local tools or your own AI provider.",
-    version: "1.1.1",
+    version: "1.2.0",
     homepage_url: "https://github.com/AyonO1/Promnexa",
     permissions: ["storage", "contextMenus", "activeTab"],
     host_permissions: [

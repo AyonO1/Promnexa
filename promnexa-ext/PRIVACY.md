@@ -1,7 +1,7 @@
 # Promnexa — Privacy Policy
 
 **Effective Date:** October 12, 2026  
-**Last Updated:** October 28, 2026
+**Last Updated:** October 30, 2026
 
 Promnexa ("we", "our", or "the extension") is committed to protecting your privacy. This Privacy Policy explains our practices regarding data collection, storage, and processing.
 
@@ -20,8 +20,8 @@ Promnexa ("we", "our", or "the extension") is committed to protecting your priva
 All data is stored exclusively in your local browser storage (`browser.storage.local` / `chrome.storage.local`):
 
 - **User Preferences:** Theme selection (dark/light/system), UI language, default category, and default optimization mode.
-- **Saved Prompts & History:** Prompts you explicitly favorite, revisions and local usefulness feedback. Optimization history is saved only while the history switch is enabled; disabling it does not erase existing entries.
-- **API Keys (Optional):** If you choose to configure an optional AI provider (OpenAI, Anthropic Claude, or Google Gemini), your API key is stored unencrypted in local extension storage on your device. It is never transmitted to Promnexa servers or any third-party other than the official API endpoint you configured.
+- **Saved Prompts & History:** Prompts you explicitly favorite, revisions and local usefulness feedback. New installations start with history disabled; existing choices are retained. Optimization history is saved only while the history switch is enabled; disabling it does not erase existing entries.
+- **API Keys (Optional):** If you choose to configure an optional AI provider (OpenAI, Anthropic Claude, or Google Gemini), your API key is stored separately in browser-session storage by default (cleared on browser restart). If you explicitly enable Remember, it is stored unencrypted in local extension storage on your device. It is never transmitted to Promnexa servers or any third-party other than the official API endpoint you configured.
 
 ---
 
@@ -73,3 +73,11 @@ You retain 100% control over your data:
 For questions, feedback, or security concerns:
 - **Project Repository:** https://github.com/AyonO1/Promnexa
 - **Issues & Support:** https://github.com/AyonO1/Promnexa/issues
+
+
+## Review hardening in 1.2.0
+Chrome local extension storage is restricted to trusted extension contexts when supported; content scripts receive only sanitized integration preferences. Remembered keys on browsers without that access-control API remain unencrypted extension-local data. No secret-vault or end-to-end encryption claim is made. Legacy general-settings keys migrate to session storage and a notice explains how to opt into Remember.
+
+Before external AI use, a local heuristic scanner flags common credential patterns, password assignments and email addresses. Users can redact them or explicitly consent to sending the flagged data. The scanner can miss sensitive information; review the full prompt yourself. API input limits and token estimates are approximate cost controls, not billing predictions. No automatic retry incurs an additional provider request.
+
+Context-menu selections are held in session storage, associated with a source tab and a unique action, and ignored after two minutes. They are removed when consumed; old pending entries are bounded and cleaned on later actions, and session data clears on browser restart. Saved prompts have a four-MiB budget, history a two-MiB rolling budget, and client profiles a two-MiB budget. History may evict older entries within its budget; saved prompts are not silently evicted. Local feedback and all text comparison stay on the device.
