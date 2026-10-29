@@ -1,3 +1,9 @@
+import { analyzePrompt, textDifference } from "../../../lib/prompt-analysis";
+import {
+  scanSensitiveInfo,
+  redactSensitiveInfo,
+  estimateTokens,
+} from "../../../lib/sensitive-info";
 import React from "react";
 import type {
   Category,
@@ -45,6 +51,7 @@ interface OptimizeScreenProps {
   initialInput?: string;
   initialCategory?: Category;
   onClearInitial?: () => void;
+  maxAiInputCharacters?: number;
 }
 
 const CATEGORY_ICONS: Record<Category, React.ReactNode> = {
@@ -86,6 +93,7 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
   initialInput,
   initialCategory,
   onClearInitial,
+  maxAiInputCharacters = 20000,
 }) => {
   const t = getT(language);
   const hasAiConfig = Boolean(
@@ -123,6 +131,12 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
   React.useEffect(() => {
     setEngine(hasAiConfig ? "ai" : "local");
   }, [hasAiConfig]);
+  const [answers, setAnswers] = React.useState<Record<string, string>>({});
+  const analysis = React.useMemo(() => analyzePrompt(input), [input]);
+  const findings = React.useMemo(() => scanSensitiveInfo(input), [input]);
+  const difference = result
+    ? textDifference(result.original, result.optimized)
+    : null;
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   // If initial input changed from props, update input
@@ -140,14 +154,27 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
   // Read context action from storage on mount (from context menu or floating button)
   React.useEffect(() => {
     const checkContextAction = async () => {
+      if (
+        new URLSearchParams(location.search).get("error") ===
+        "selection-too-long"
+      ) {
+        addToast(
+          "Selection exceeds 100,000 characters. Select a smaller passage; no text was truncated.",
+          "error",
+        );
+        return;
+      }
       try {
         if (typeof browser !== "undefined" && browser.storage?.local) {
-          const res = (await browser.storage.local.get(
-            "promnexa_context_action",
-          )) as Record<string, any>;
-          const data = res.promnexa_context_action as
-            | { action?: string; text?: string }
-            | undefined;
+          const response = await browser.runtime.sendMessage({
+            type: "PROMNEXA_CONSUME_CONTEXT",
+            id:
+              new URLSearchParams(location.search).get("context") || undefined,
+          });
+          const data = response?.action as {
+            action?: string;
+            text?: string;
+          } | null;
           if (data && data.text) {
             const rawText =
               data.action === "explain"
@@ -179,10 +206,9 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
             setMode(targetMode);
 
             // Clean up context action so it doesn't run again
-            await browser.storage.local.remove("promnexa_context_action");
 
             // Run optimization
-            executeOptimization(rawText, targetCategory, targetMode);
+            executeOptimization(rawText, targetCategory, targetMode, "local");
           }
         }
       } catch (err) {
@@ -229,6 +255,22 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
 
       if (activeEngine === "ai" && aiProvider?.apiKey) {
         try {
+          if (textToOptimize.length > maxAiInputCharacters)
+            throw new Error(
+              "AI input limit exceeded. Shorten the prompt or change the limit in Settings.",
+            );
+          const sensitive = scanSensitiveInfo(textToOptimize);
+          if (
+            sensitive.length &&
+            !confirm(
+              "This prompt may contain " +
+                [...new Set(sensitive.map((f) => f.kind))].join(", ") +
+                ". Send it to " +
+                aiProvider.provider +
+                "? Cancel to keep it local.",
+            )
+          )
+            throw new Error("Sensitive data sharing was declined.");
           if (import.meta.env.FIREFOX) {
             const granted = await browser.permissions.request({
               data_collection: [
@@ -241,6 +283,7 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
           }
           const response = await browser.runtime.sendMessage({
             type: "PROMNEXA_AI",
+            sensitiveConsent: sensitive.length > 0,
             text: textToOptimize,
             category: cat,
             mode: m,
@@ -258,7 +301,10 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
             `AI Error: ${aiErr.message || "Request failed"}. Using local engine.`,
             "info",
           );
-          optResult = optimizePrompt(textToOptimize, cat, m);
+          optResult = {
+            ...optimizePrompt(textToOptimize, cat, m),
+            fallbackReason: aiErr.message || "AI unavailable",
+          };
         }
       } else {
         // Local engine
@@ -272,7 +318,7 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
 
       // Save to history
       try {
-        await addToHistory({
+        const history = await addToHistory({
           id: generateId(),
           original: textToOptimize,
           optimized: optResult.optimized,
@@ -281,8 +327,16 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
           isFavorite: false,
           createdAt: Date.now(),
         });
+        if (history.evicted)
+          addToast(
+            `History storage budget reached; ${history.evicted} older entries were removed.`,
+            "info",
+          );
       } catch {
-        // Silently fail for history
+        addToast(
+          "Result ready, but history could not be saved. Export or clear older history.",
+          "info",
+        );
       }
     } catch (err: any) {
       addToast(err.message || "Optimization failed", "error");
@@ -486,6 +540,65 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
         </div>
       </div>
 
+      {engine === "ai" && (
+        <p className="section-subtitle">
+          {aiProvider?.provider} · about {estimateTokens(input)} input tokens
+          (rough prompt-only estimate; excludes system instructions and output)
+          · {input.length}/{maxAiInputCharacters} characters. API usage is
+          billed by your provider.
+        </p>
+      )}
+      {findings.length > 0 && (
+        <div className="result-card" style={{ padding: 10 }}>
+          <p>
+            Potential sensitive information:{" "}
+            {[...new Set(findings.map((f) => f.kind))].join(", ")}. Local use
+            stays on this device.
+          </p>
+          <button
+            className="chip"
+            onClick={() => setInput(redactSensitiveInfo(input))}
+          >
+            Redact before AI use
+          </button>
+        </div>
+      )}
+      {analysis.questions.length > 0 && (
+        <details style={{ margin: "10px 0" }}>
+          <summary>
+            Clarify first ({analysis.questions.length} questions)
+          </summary>
+          {analysis.questions.map((q) => (
+            <label className="input-group" key={q}>
+              {q}
+              <input
+                className="input"
+                value={answers[q] || ""}
+                onChange={(e) =>
+                  setAnswers((v) => ({ ...v, [q]: e.target.value }))
+                }
+              />
+            </label>
+          ))}
+          <button
+            className="chip"
+            disabled={!analysis.questions.some((q) => answers[q]?.trim())}
+            onClick={() => {
+              setInput(
+                input +
+                  "\n\n" +
+                  analysis.questions
+                    .filter((q) => answers[q]?.trim())
+                    .map((q) => q + " " + answers[q]!.trim())
+                    .join("\n"),
+              );
+              setAnswers({});
+            }}
+          >
+            Add my answers to the prompt
+          </button>
+        </details>
+      )}
       {/* Example prompts when empty */}
       {!input && !result && (
         <div style={{ marginTop: "var(--space-3)" }}>
@@ -565,6 +678,17 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
       {/* Result Card */}
       {result && (
         <div className="result-card">
+          <div role="status" className="tag">
+            {result.engine === "ai"
+              ? "AI provider"
+              : result.fallbackReason
+                ? "Local fallback"
+                : "Local engine"}{" "}
+            ·{" "}
+            {result.status === "unchanged"
+              ? "No safe improvement needed"
+              : "Task-specific rewrite"}
+          </div>
           <div className="result-card__header">
             <div className="result-card__title">
               <Sparkles /> {t.optimizedPrompt}
@@ -601,6 +725,12 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
             {/* Comparison tabs */}
             <div className="comparison-tabs">
               <button
+                className={`comparison-tab ${comparisonView === "changes" ? "comparison-tab--active" : ""}`}
+                onClick={() => setComparisonView("changes")}
+              >
+                Changes
+              </button>
+              <button
                 className={`comparison-tab ${comparisonView === "optimized" ? "comparison-tab--active" : ""}`}
                 onClick={() => setComparisonView("optimized")}
               >
@@ -615,9 +745,25 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
             </div>
 
             <div className="result-text">
-              {comparisonView === "optimized"
-                ? result.optimized
-                : result.original}
+              {comparisonView === "changes" && difference ? (
+                <>
+                  {difference.before}
+                  <del style={{ background: "#4b2020" }}>
+                    {difference.removed}
+                  </del>
+                  <mark style={{ background: "#204b32", color: "inherit" }}>
+                    {difference.added}
+                  </mark>
+                  {difference.after}
+                  {!difference.removed && !difference.added && (
+                    <p>{result.improvements.join(" ")}</p>
+                  )}
+                </>
+              ) : comparisonView === "optimized" ? (
+                result.optimized
+              ) : (
+                result.original
+              )}
             </div>
 
             {/* Quick refinement actions */}
@@ -687,7 +833,11 @@ export const OptimizeScreen: React.FC<OptimizeScreenProps> = ({
                     className="category-label"
                     style={{ display: "block", marginBottom: "6px" }}
                   >
-                    {t.improvements}
+                    {result.status === "unchanged"
+                      ? language === "bn"
+                        ? "মূল লেখা রাখার কারণ"
+                        : "Why the original was kept"
+                      : t.improvements}
                   </span>
                   <div className="chips-container">
                     {result.improvements.map((imp, i) => (

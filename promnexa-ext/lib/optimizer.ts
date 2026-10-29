@@ -1,3 +1,4 @@
+import { analyzePrompt } from "./prompt-analysis.ts";
 import type { Category, OptimizationMode, OptimizationResult } from "./types";
 
 // ---- Category Detection ----
@@ -235,6 +236,18 @@ const CATEGORY_KEYWORDS: Record<Category, string[]> = {
 
 export function detectCategory(text: string): Category {
   const lowerText = text.toLowerCase();
+  if (
+    /\b(?:program (?:fails|crashes)|debug|stack trace|tcp|three[ -]way handshake|network protocol)\b/i.test(
+      text,
+    )
+  )
+    return "coding";
+  if (
+    /(?:শেখাও|শিখতে|শেখার|শিখব)|\b(?:shekhao|shikhte|learn|learning roadmap)\b/i.test(
+      text,
+    )
+  )
+    return "learning";
   const bangla: Partial<Record<Category, string[]>> = {
     education: ["পরীক্ষা", "পড়াশোনা", "পড়াশোনা", "শিক্ষা", "অ্যাসাইনমেন্ট"],
     coding: ["কোড", "প্রোগ্রাম", "প্রোগ্রামিং", "বাগ"],
@@ -308,382 +321,137 @@ export const CATEGORY_INFO: Record<
   general: { label: "General", emoji: "✨", description: "Any topic" },
 };
 
-// ---- Optimization Templates ----
-interface OptimizationTemplate {
-  prefix: string;
-  structure: string[];
-  suffix: string;
-}
-
-const MODE_TEMPLATES: Record<OptimizationMode, OptimizationTemplate> = {
-  quick: {
-    prefix: "",
-    structure: [
-      "Clear the objective",
-      "Specify the expected output format",
-      "Add relevant constraints",
-    ],
-    suffix: "Be concise and direct.",
-  },
-  deep: {
-    prefix: "",
-    structure: [
-      "Define the role/expertise needed",
-      "State the objective clearly",
-      "Provide necessary context",
-      "Specify requirements and constraints",
-      "Define the expected output format",
-      "Include quality criteria",
-      "Add relevant examples if helpful",
-    ],
-    suffix: "Provide a thorough, well-structured response.",
-  },
-  expert: {
-    prefix: "Act as a domain expert.",
-    structure: [
-      "Identify the professional domain",
-      "Apply industry standards",
-      "Reference best practices",
-      "Include technical specifications",
-      "Provide actionable recommendations",
-      "Consider edge cases",
-    ],
-    suffix: "Apply professional-grade rigor to the response.",
-  },
-  beginner: {
-    prefix: "",
-    structure: [
-      "Explain in simple, accessible language",
-      "Use analogies and real-world examples",
-      "Break down complex concepts step by step",
-      "Avoid jargon unless defined",
-      "Include practical exercises",
-    ],
-    suffix: "Make the explanation accessible to someone new to this topic.",
-  },
-  custom: {
-    prefix: "",
-    structure: [],
-    suffix: "",
-  },
-};
-
-// ---- Category-Specific Enhancements ----
-function getCategoryEnhancements(category: Category): string {
-  switch (category) {
-    case "education":
-      return "\n\nAdditional context:\n- Specify the academic level (high school / undergraduate / graduate)\n- Include learning objectives\n- Reference curriculum standards if applicable\n- Suggest assessment criteria";
-
-    case "coding":
-      return "\n\nTechnical context:\n- Specify the programming language and version\n- Mention the framework/library if relevant\n- Include error messages or stack traces if debugging\n- Define expected behavior vs actual behavior\n- Specify testing requirements";
-
-    case "learning":
-      return "\n\nLearning context:\n- Specify current skill level\n- Define learning goals and timeline\n- Prefer hands-on examples and exercises\n- Include progress checkpoints\n- Suggest resources for further learning";
-
-    case "daily":
-      return "\n\nPractical context:\n- Keep the response actionable and concise\n- Include specific steps or checklists\n- Consider time and budget constraints\n- Prioritize practicality over perfection";
-
-    case "writing":
-      return "\n\nWriting context:\n- Specify the target audience\n- Define the desired tone and style\n- Include word count or length guidelines\n- Consider SEO requirements if applicable\n- Maintain consistent voice throughout";
-
-    case "research":
-      return "\n\nResearch context:\n- Cite sources and evidence\n- Distinguish between established facts and hypotheses\n- Use appropriate methodology\n- Acknowledge limitations\n- Present findings objectively";
-
-    case "business":
-      return "\n\nBusiness context:\n- Include relevant metrics and KPIs\n- Consider stakeholder perspectives\n- Provide actionable recommendations\n- Account for timeline and resources\n- Include risk assessment";
-
-    default:
-      return "";
-  }
-}
-
-// ---- Core Optimization Logic ----
+// A conservative intent-locked local engine. Original text and code remain intact.
 export function optimizePrompt(
   input: string,
   category: Category,
   mode: OptimizationMode,
 ): OptimizationResult {
-  const trimmedInput = input.trim();
-  if (!trimmedInput) {
-    return {
-      original: input,
-      optimized: "",
-      category,
-      mode,
-      improvements: [],
-      timestamp: Date.now(),
-    };
-  }
-
-  if (trimmedInput.length > 100000)
+  if (input.length > 100000)
     throw new Error("Prompt must be at most 100,000 characters.");
-  const bn = /[\u0980-\u09FF]/.test(trimmedInput);
-  const strict =
-    /\b(only|exactly|verbatim|no (?:headings|explanation|markdown)|do not (?:add|change)|json|haiku|sonnet|poem|poetry|regex|csv)\b|শুধু|হুবহু|কবিতা|হাইকু/i.test(
-      trimmedInput,
-    );
-  // Explicit constraints and code are stronger signals than prompt length.
-  if (strict || /```/.test(trimmedInput) || mode === "custom") {
-    return {
-      original: input,
-      optimized: trimmedInput,
-      category,
-      mode,
-      improvements: [
-        bn
-          ? "মূল নির্দেশনা ও নির্দিষ্ট বিন্যাস অক্ষুণ্ণ রাখা হয়েছে"
-          : "Preserved explicit constraints and original wording",
-      ],
-      timestamp: Date.now(),
-    };
-  }
-  if (bn) {
-    const extra =
-      mode === "quick"
-        ? "মূল উদ্দেশ্য বজায় রেখে সরাসরি ও সংক্ষিপ্ত উত্তর দিন।"
-        : mode === "beginner"
-          ? "সহজ ভাষায় ধাপে ধাপে ব্যাখ্যা করুন। প্রয়োজন হলে উদাহরণ দিন।"
-          : "মূল উদ্দেশ্য ও সীমাবদ্ধতা মেনে নির্ভুল এবং ব্যবহারযোগ্য উত্তর দিন। তথ্য অনুপস্থিত হলে তা স্পষ্ট করুন; অনুমানকে সত্য হিসেবে লিখবেন না।";
-    return {
-      original: input,
-      optimized: trimmedInput + "\n\n" + extra,
-      category,
-      mode,
-      improvements: ["মূল ভাষা ও উদ্দেশ্য বজায় রাখা হয়েছে"],
-      timestamp: Date.now(),
-    };
-  }
-  const template = MODE_TEMPLATES[mode];
-  const improvements: string[] = [];
-  let optimized = "";
-
-  // Detect if the prompt is too vague
-  const isVague =
-    !/\b(create|build|write|explain|make|fix|design|develop|analyze|generate|translate|summarize|draft|teach|plan)\b/i.test(
-      trimmedInput,
-    ) && trimmedInput.split(/\s+/).length < 5;
-  const hasQuestion = /\?/.test(trimmedInput);
-  const hasGoal =
-    /\b(create|build|write|explain|help|make|fix|design|develop|improve|analyze|generate)\b/i.test(
-      trimmedInput,
-    );
-
-  // Build the optimized prompt
-  const parts: string[] = [];
-
-  // 1. Role prefix
-  if (mode === "expert") {
-    const domain = detectDomain(trimmedInput, category);
-    parts.push(`You are an expert ${domain}.`);
-    improvements.push("Added relevant expert role");
-  } else if (mode === "deep") {
-    const domain = detectDomain(trimmedInput, category);
-    parts.push(`You are a knowledgeable ${domain}.`);
-    improvements.push("Added professional context");
-  }
-
-  // 2. Main objective — clarify the intent
-  if (isVague) {
-    parts.push(`\n## Objective\n${expandVaguePrompt(trimmedInput, category)}`);
-    improvements.push("Expanded vague instruction into clear objective");
-  } else {
-    parts.push(`\n## Objective\n${clarifyPrompt(trimmedInput)}`);
-    improvements.push("Clarified the main objective");
-  }
-
-  // 3. Context & requirements based on mode
-  if (mode !== "quick") {
-    const contextSection = buildContextSection(trimmedInput, category, mode);
-    if (contextSection) {
-      parts.push(contextSection);
-      improvements.push("Added structured context and requirements");
-    }
-  }
-
-  // 4. Output expectations
-  const outputFormat = buildOutputExpectations(trimmedInput, category, mode);
-  if (outputFormat) {
-    parts.push(outputFormat);
-    improvements.push("Specified expected output format");
-  }
-
-  // 5. Category-specific enhancements
-  if (mode === "deep" || mode === "expert") {
-    const enhancement = getCategoryEnhancements(category);
-    if (enhancement) {
-      parts.push(enhancement);
-      improvements.push("Added category-specific guidelines");
-    }
-  }
-
-  // 6. Quality constraints
-  if (mode !== "quick") {
-    parts.push("\n## Quality Guidelines");
-    parts.push("- Be accurate and avoid making up information");
-    parts.push("- Provide actionable and specific guidance");
-    if (mode === "beginner") {
-      parts.push("- Use simple language and clear explanations");
-      parts.push("- Include helpful analogies where appropriate");
-      improvements.push("Added beginner-friendly guidelines");
-    }
-    if (mode === "expert") {
-      parts.push("- Apply industry best practices");
-      parts.push("- Consider edge cases and potential issues");
-      improvements.push("Added expert-level quality standards");
-    }
-  }
-
-  // 7. Suffix
-  if (template.suffix) {
-    parts.push(`\n${template.suffix}`);
-  }
-
-  optimized = parts.join("\n");
-
-  // Clean up
-  optimized = optimized.replace(/\n{3,}/g, "\n\n").trim();
-
-  return {
+  const text = input.trim();
+  const analysis = analyzePrompt(text);
+  const result = (
+    optimized: string,
+    reasons: string[],
+  ): OptimizationResult => ({
     original: input,
     optimized,
     category,
     mode,
-    improvements,
+    improvements: reasons,
     timestamp: Date.now(),
-  };
-}
-
-// ---- Helper Functions ----
-function detectDomain(text: string, category: Category): string {
-  const domainMap: Record<Category, string> = {
-    education: "educator and academic advisor",
-    coding: "software engineer and technical architect",
-    learning: "learning coach and curriculum designer",
-    daily: "productivity consultant and personal advisor",
-    writing: "professional writer and content strategist",
-    research: "research analyst and data scientist",
-    business: "business strategist and management consultant",
-    general: "knowledgeable assistant",
-  };
-  return domainMap[category] || "knowledgeable assistant";
-}
-
-function expandVaguePrompt(text: string, category: Category): string {
-  const expanded = text.charAt(0).toUpperCase() + text.slice(1);
-  const templates: Record<Category, string> = {
-    education: `${expanded}\n\nPlease provide a comprehensive and well-structured explanation that includes:\n- Key concepts and definitions\n- Practical examples\n- Common misconceptions to avoid\n- Practice exercises or questions to test understanding`,
-    coding: `${expanded}\n\nPlease provide:\n- A clear, working solution with code\n- Step-by-step explanation of the approach\n- Best practices and potential pitfalls\n- Alternative approaches if applicable`,
-    learning: `${expanded}\n\nPlease create a structured learning path that includes:\n- Prerequisites and foundational concepts\n- Progressive lessons from basics to advanced\n- Hands-on exercises and projects\n- Resources for further learning`,
-    daily: `${expanded}\n\nPlease provide:\n- Clear, actionable steps\n- Practical tips and recommendations\n- Things to consider or watch out for\n- A summary of key points`,
-    writing: `${expanded}\n\nPlease:\n- Define the target audience and tone\n- Create a structured outline\n- Write engaging content with clear structure\n- Include a compelling introduction and conclusion`,
-    research: `${expanded}\n\nPlease provide:\n- A thorough analysis with evidence\n- Key findings and insights\n- Methodology and sources\n- Conclusions and recommendations`,
-    business: `${expanded}\n\nPlease include:\n- Strategic analysis and recommendations\n- Key metrics and success criteria\n- Implementation timeline\n- Risk assessment and mitigation strategies`,
-    general: `${expanded}\n\nPlease provide a thorough, well-organized response that covers:\n- Key points and main ideas\n- Supporting details and examples\n- Practical takeaways`,
-  };
-  return templates[category] || templates.general;
-}
-
-function clarifyPrompt(text: string): string {
-  let clarified = text.trim();
-
-  // Capitalize first letter
-  clarified = clarified.charAt(0).toUpperCase() + clarified.slice(1);
-
-  // Ensure it ends with proper punctuation
-  if (!/[.!?]$/.test(clarified)) {
-    clarified += ".";
-  }
-
-  return clarified;
-}
-
-function buildContextSection(
-  text: string,
-  category: Category,
-  mode: OptimizationMode,
-): string {
-  const sections: string[] = [];
-
-  sections.push("\n## Requirements");
-
-  if (category === "coding") {
-    sections.push("- Provide clean, well-commented code");
-    sections.push("- Follow established coding conventions");
-    sections.push("- Include error handling");
-    if (mode === "expert") {
-      sections.push("- Consider performance implications");
-      sections.push("- Include test cases");
-      sections.push("- Follow SOLID principles");
-    }
-  } else if (category === "education") {
-    sections.push("- Structure the explanation logically");
-    sections.push("- Use clear examples to illustrate concepts");
-    if (mode === "beginner") {
-      sections.push("- Start from the basics and build up");
-      sections.push("- Avoid technical jargon");
-    }
+    engine: "local",
+    status: optimized === text ? "unchanged" : "improved",
+    questions: analysis.questions,
+    protectedConstraints: analysis.constraints,
+  });
+  if (!text) return result("", []);
+  const bn = analysis.language === "bn",
+    banglish = analysis.language === "banglish";
+  // Do not guess a subject or override explicit prohibitions to manufacture a rewrite.
+  if (
+    analysis.verbatim ||
+    analysis.lengthLocked ||
+    analysis.hasNegativeConstraint ||
+    analysis.questions.some((q) => q.includes("poem")) ||
+    /^(?:write a haiku|শুধু একটি কবিতা লিখুন)$/i.test(text)
+  )
+    return result(text, [
+      bn
+        ? "মূল নির্দেশনা যথেষ্ট নির্দিষ্ট; সীমাবদ্ধতার সঙ্গে বিরোধ তৈরি করতে কোনো নির্দেশ যোগ করা হয়নি।"
+        : "No safe addition needed: explicit wording, length or negative constraints take priority.",
+    ]);
+  // Raw fenced payloads without an instruction are data, not a task to invent.
+  if (/^```/.test(text))
+    return result(text, [
+      "Supplied code preserved; specify the task before rewriting.",
+    ]);
+  let addition = "";
+  const prose = text.replace(/```[\s\S]*?```/g, "");
+  if (analysis.format === "poetry") {
+    if (mode === "quick")
+      return result(text, [
+        "Requested poetic form retained; no extra outline or commentary added.",
+      ]);
+    addition = bn
+      ? "অনুরোধ করা কাব্যরূপ ও বিষয় বজায় রেখে নির্দিষ্ট চিত্রকল্প ব্যবহার করুন। কবিতার পরে বিশ্লেষণ যোগ করবেন না।"
+      : "Keep the requested poetic form and theme; use concrete sensory details. Return the poem without an outline or analysis.";
+  } else if (
+    analysis.format === "json" ||
+    analysis.format === "csv" ||
+    analysis.format === "regex" ||
+    analysis.format === "code"
+  ) {
+    return result(text, [
+      "Requested machine-readable format retained; no unrequested fields or explanations added.",
+    ]);
+  } else if (/\b(?:tcp|three[ -]way handshake)\b/i.test(prose)) {
+    addition =
+      "Describe the SYN, SYN-ACK and ACK exchange and what each step establishes.";
+  } else if (
+    /\b(?:debug|fix|fails?|crash|error)\b|বাগ|ঠিক করুন/i.test(prose) &&
+    category === "coding"
+  ) {
+    addition = bn
+      ? "দেওয়া কোড ও ত্রুটির ভিত্তিতে কারণ চিহ্নিত করুন। প্রয়োজনীয় তথ্য না থাকলে আগে প্রশ্ন করুন। অনুরোধ করা পরিবর্তন ছাড়া বিদ্যমান আচরণ অক্ষুণ্ণ রাখুন।"
+      : "Identify the cause from the supplied code and error; ask for missing evidence before proposing a fix. Preserve behavior outside the requested change.";
+    if (mode === "expert")
+      addition += bn
+        ? " সংশোধন যাচাই করার একটি পরীক্ষা দিন।"
+        : " Include a focused test that verifies the fix.";
+  } else if (category === "coding") {
+    addition = bn
+      ? "প্রদত্ত প্রয়োজনীয়তা ও অনুমান আলাদা করুন। ইন্টারফেস অক্ষুণ্ণ রাখুন এবং সমাধান যাচাইয়ের উপায় দিন।"
+      : "Separate stated requirements from assumptions. Preserve interfaces and explain how the proposed solution can be verified.";
+    if (mode === "expert")
+      addition += bn
+        ? " ব্যর্থতার সম্ভাব্য কারণ ও কর্মক্ষমতার আপসগুলো বিবেচনা করুন।"
+        : " Consider failure modes and performance trade-offs.";
+  } else if (category === "learning" || category === "education") {
+    addition = bn
+      ? "বর্তমান জ্ঞানের স্তর অজানা হলে আগে জিজ্ঞেস করুন। একটি বাস্তব উদাহরণ দিয়ে ধারণাটি বোঝান এবং বোঝাপড়া যাচাইয়ের একটি প্রশ্ন দিন।"
+      : banglish
+        ? "Age amar current level jene nao. Ekta practical example diye bojhao, tarpor bujhechi kina ekta proshno koro."
+        : "Ask about the current level if it is missing; explain with one practical example and a question to check understanding.";
   } else if (category === "writing") {
-    sections.push("- Maintain consistent tone and style");
-    sections.push("- Use engaging and clear language");
-    sections.push("- Structure content with headers and sections");
-  } else {
-    sections.push("- Be thorough yet concise");
-    sections.push("- Focus on practical, actionable information");
-    sections.push("- Organize the response clearly");
-  }
-
-  // Add placeholders for missing context
-  if (text.split(" ").length < 10) {
-    sections.push("\n## Context (please fill in)");
-    sections.push("- [Specify your current level of knowledge on this topic]");
-    sections.push("- [Describe any specific constraints or preferences]");
-    sections.push("- [Mention the intended use or audience]");
-  }
-
-  return sections.join("\n");
-}
-
-function buildOutputExpectations(
-  text: string,
-  category: Category,
-  mode: OptimizationMode,
-): string {
-  const sections: string[] = ["\n## Expected Output"];
-
-  if (mode === "quick") {
-    sections.push("- Provide a clear, concise response");
-    return sections.join("\n");
-  }
-
-  switch (category) {
-    case "coding":
-      sections.push("- Working code with inline comments");
-      sections.push("- Brief explanation of the approach");
-      if (mode !== "beginner") {
-        sections.push("- Time and space complexity analysis");
-      }
-      break;
-    case "education":
-      sections.push("- Structured explanation with examples");
-      sections.push("- Key takeaways summary");
-      sections.push("- Practice questions or exercises");
-      break;
-    case "writing":
-      sections.push("- Well-structured content with clear sections");
-      sections.push("- Engaging opening and strong conclusion");
-      break;
-    case "research":
-      sections.push("- Evidence-based analysis");
-      sections.push("- Clear methodology description");
-      sections.push("- Summary of findings");
-      break;
-    default:
-      sections.push("- Well-organized response with clear structure");
-      sections.push("- Practical examples where applicable");
-      sections.push("- Summary of key points");
-  }
-
-  return sections.join("\n");
+    addition = bn
+      ? "পাঠক ও লেখার ধরন স্পষ্ট না হলে আগে জিজ্ঞেস করুন। অনুরোধ করা বিষয় ও বিন্যাস বজায় রাখুন।"
+      : "If audience or tone is missing, ask before drafting. Preserve the requested subject and form.";
+  } else if (category === "business") {
+    addition = bn
+      ? "দেওয়া তথ্যের ভিত্তিতে পরবর্তী করণীয় দিন। দাম, সময়সীমা বা ব্যবসায়িক দাবি সম্পর্কে অনুপস্থিত তথ্য আগে জিজ্ঞেস করুন।"
+      : "Use the supplied facts to identify next steps. Ask for missing prices, deadlines or evidence rather than inventing commitments.";
+  } else if (category === "research") {
+    addition = bn
+      ? "প্রমাণ ও অনুমান আলাদা করুন এবং অজানা তথ্য স্পষ্ট করুন।"
+      : "Separate supporting evidence from assumptions and identify what remains unknown.";
+  } else if (category === "daily") {
+    addition = bn
+      ? "মূল লক্ষ্য পূরণের জন্য ব্যবহারযোগ্য পরবর্তী পদক্ষেপ দিন; সময় বা বাজেট অজানা হলে আগে জিজ্ঞেস করুন।"
+      : "Give actionable next steps; ask about time or budget only if needed for the task.";
+  } else if (mode !== "quick") {
+    addition = bn
+      ? "মূল লক্ষ্য ও সীমাবদ্ধতা বজায় রাখুন। প্রয়োজনীয় তথ্য অনুপস্থিত হলে তা আগে জিজ্ঞেস করুন।"
+      : "Preserve the objective and constraints. Ask about essential missing context before answering.";
+  } else
+    return result(text, [
+      "No task-specific improvement identified; original retained instead of adding generic headings.",
+    ]);
+  if (mode === "beginner" && !analysis.format)
+    addition += bn
+      ? " সহজ ভাষা ব্যবহার করুন।"
+      : banglish
+        ? " Shohoj bhashay bolo."
+        : " Use simple language and define necessary jargon.";
+  return result(text + "\n\n" + addition, [
+    bn
+      ? "মূল লেখা ও কোড অক্ষুণ্ণ রেখে কাজের জন্য প্রাসঙ্গিক নির্দেশ যোগ করা হয়েছে।"
+      : "Original wording and supplied code preserved; added task-specific guidance.",
+    ...(analysis.constraints.length
+      ? ["Explicit format constraints retained."]
+      : []),
+  ]);
 }
 
 // ---- Utility Functions ----

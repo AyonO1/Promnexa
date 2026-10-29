@@ -1,3 +1,4 @@
+import { textDifference } from "../../../lib/prompt-analysis";
 import React from "react";
 import type { Category, SavedPrompt, SavedTab } from "../../../lib/types";
 import {
@@ -270,6 +271,33 @@ export const SavedScreen: React.FC<SavedScreenProps> = ({
                     Cancel
                   </button>
                 </div>
+              )}
+              {item.parentId && (
+                <details>
+                  <summary>Compare with parent version</summary>
+                  {(() => {
+                    const parent = [...savedPrompts, ...history].find(
+                      (p) => p.id === item.parentId,
+                    );
+                    if (!parent)
+                      return <p>Parent version is no longer stored.</p>;
+                    const d = textDifference(parent.optimized, item.optimized);
+                    return (
+                      <pre
+                        style={{
+                          whiteSpace: "pre-wrap",
+                          maxHeight: 160,
+                          overflow: "auto",
+                        }}
+                      >
+                        {d.before}
+                        <del>{d.removed}</del>
+                        <mark>{d.added}</mark>
+                        {d.after}
+                      </pre>
+                    );
+                  })()}
+                </details>
               )}
               <div className="prompt-card__footer">
                 <div className="prompt-card__tags">

@@ -1,3 +1,6 @@
+import { findEditor, usableEditor } from "../lib/editor-target";
+import { matchesShortcut } from "../lib/shortcuts";
+import { scanSensitiveInfo } from "../lib/sensitive-info";
 /**
  * Promnexa Content Script
  * Seamless in-page AI assistant for ChatGPT, Claude, Gemini, DeepSeek, Copilot, and Grok.
@@ -35,73 +38,53 @@ export default defineContentScript({
     } | null = null;
     let currentMode: OptimizationMode = "quick";
 
-    // Check if integration is enabled for this site
-    async function checkEnabled(): Promise<boolean> {
+    let publicSettings = {
+      websiteIntegrations: [] as { site: string; enabled: boolean }[],
+      defaultMode: "quick" as OptimizationMode,
+      inlineShortcut: "Alt+Shift+P",
+      language: "en",
+      maxAiInputCharacters: 20000,
+    };
+    let lastFocusedEditor: HTMLElement | null = null;
+    document.addEventListener("focusin", (event) => {
+      const target =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>(
+              'textarea,input,[contenteditable="true"]',
+            )
+          : null;
+      if (usableEditor(target)) lastFocusedEditor = target;
+    });
+    async function checkEnabled(
+      settings?: typeof publicSettings,
+    ): Promise<boolean> {
       try {
-        const result = (await browser.storage.local.get(
-          "promnexa_settings",
-        )) as Record<string, any>;
-        const settings = result?.promnexa_settings;
-        if (!settings || !Array.isArray(settings.websiteIntegrations)) {
-          return true; // Default to enabled
+        const data =
+          settings ||
+          (
+            await browser.runtime.sendMessage({
+              type: "PROMNEXA_PUBLIC_SETTINGS",
+            })
+          )?.settings;
+        if (data) {
+          publicSettings = data;
+          currentMode = data.defaultMode;
         }
-
-        const hostname = window.location.hostname;
-        const integration = settings.websiteIntegrations.find(
-          (i: { site: string; enabled: boolean }) =>
-            hostname === i.site ||
-            (hostname === "chat.openai.com" && i.site === "chatgpt.com") ||
-            (hostname === "x.com" && i.site === "grok.com"),
+        const aliases: Record<string, string> = {
+          "chat.openai.com": "chatgpt.com",
+          "x.com": "grok.com",
+        };
+        const host = aliases[location.hostname] || location.hostname;
+        const integration = publicSettings.websiteIntegrations.find(
+          (i) => i.site === host,
         );
         return integration ? integration.enabled : true;
       } catch {
-        return true;
+        return false;
       }
     }
-
-    // Common selectors for AI chat inputs across all supported platforms
-    const INPUT_SELECTORS = [
-      // ChatGPT
-      'textarea[data-id="root"]',
-      "#prompt-textarea",
-      'div[contenteditable="true"][data-placeholder]',
-      'div[contenteditable="true"]#prompt-textarea',
-      // Claude
-      'div.ProseMirror[contenteditable="true"]',
-      'fieldset div[contenteditable="true"]',
-      // Gemini
-      'rich-textarea div[contenteditable="true"]',
-      'div[contenteditable="true"].ql-editor',
-      ".text-input-field textarea",
-      // DeepSeek
-      "textarea#chat-input",
-      'textarea[placeholder*="DeepSeek"]',
-      // Grok & Copilot & Generic
-      'textarea[placeholder*="Ask"]',
-      'textarea[placeholder*="Message"]',
-      'textarea[placeholder*="message"]',
-      'div[contenteditable="true"]',
-      "textarea",
-    ];
-
-    // Get active input element
     function getActiveInputElement(): HTMLElement | null {
-      for (const selector of INPUT_SELECTORS) {
-        for (const el of document.querySelectorAll<HTMLElement>(selector)) {
-          if (
-            el.closest("[data-promnexa-ui], #promnexa-quick-card") ||
-            el.offsetParent === null
-          )
-            continue;
-          if (
-            el instanceof HTMLTextAreaElement ||
-            el instanceof HTMLInputElement
-          ) {
-            if (!el.disabled && !el.readOnly) return el;
-          } else if (el.isContentEditable) return el;
-        }
-      }
-      return null;
+      return findEditor(document, location.hostname, lastFocusedEditor);
     }
 
     // Read current text from the AI site's chat input
@@ -283,15 +266,17 @@ export default defineContentScript({
 
     // Create the floating Promnexa trigger button
     function createFloatingButton() {
-      if (promnexaBtn) return;
+      if (promnexaBtn) {
+        promnexaBtn.title = `Improve prompt locally in this chat (${publicSettings.inlineShortcut}). Review before sending.`;
+        return;
+      }
 
       promnexaBtn = document.createElement("button");
       (promnexaBtn as HTMLButtonElement).type = "button";
       promnexaBtn.id = "promnexa-float-btn";
       promnexaBtn.setAttribute("role", "button");
       promnexaBtn.setAttribute("tabindex", "0");
-      promnexaBtn.title =
-        "Improve prompt locally in this chat (Alt+Shift+P). Review before sending.";
+      promnexaBtn.title = `Improve prompt locally in this chat (${publicSettings.inlineShortcut}). Review before sending.`;
       promnexaBtn.setAttribute("aria-label", "Improve prompt");
 
       promnexaBtn.innerHTML = `
@@ -666,6 +651,7 @@ export default defineContentScript({
             ">✕</button>
           </div>
 
+          <div style="padding:6px 14px;font-size:11px;color:#A5B4FC" role="status">${currentResult?.engine === "ai" ? "AI provider" : "Local engine"}${currentResult?.status === "unchanged" ? " · No safe improvement needed" : ""}</div>
           ${bodyHtml}
         `;
 
@@ -680,12 +666,29 @@ export default defineContentScript({
         card?.querySelector("#pmx-ai")?.addEventListener("click", async (e) => {
           e.stopPropagation();
           const button = e.currentTarget as HTMLButtonElement;
+          if (rawText.length > publicSettings.maxAiInputCharacters) {
+            showNotification(
+              "Prompt exceeds your AI input limit. Shorten it or use the local engine.",
+            );
+            return;
+          }
+          const findings = scanSensitiveInfo(rawText);
+          if (
+            findings.length &&
+            !confirm(
+              "This prompt may contain " +
+                [...new Set(findings.map((f) => f.kind))].join(", ") +
+                ". Send this information to your configured AI provider? Cancel to keep it local.",
+            )
+          )
+            return;
           const request = ++aiRequest;
           button.disabled = true;
           button.textContent = "Optimizing with AI…";
           try {
             const response = await browser.runtime.sendMessage({
               type: "PROMNEXA_AI",
+              sensitiveConsent: findings.length > 0,
               text: rawText,
               category: detectedCat,
               mode: currentMode,
@@ -851,7 +854,7 @@ export default defineContentScript({
 
     // Keyboard shortcut improves the current draft without submitting it.
     document.addEventListener("keydown", (e) => {
-      if (e.altKey && e.shiftKey && (e.key === "p" || e.key === "P")) {
+      if (matchesShortcut(e, publicSettings.inlineShortcut)) {
         if (!isEnabled || e.repeat) return;
         e.preventDefault();
         improveInChat();
@@ -866,13 +869,15 @@ export default defineContentScript({
       }
     }
 
-    // React to settings changes
-    browser.storage.onChanged.addListener(async (changes) => {
-      if (changes.promnexa_settings) {
-        isEnabled = await checkEnabled();
-        if (isEnabled) {
-          createFloatingButton();
-        } else {
+    void init();
+
+    // Only sanitized configuration is exposed to page content scripts.
+    browser.runtime.onMessage.addListener((message) => {
+      if (message?.type !== "PROMNEXA_PUBLIC_SETTINGS_CHANGED") return;
+      checkEnabled(message.settings).then((enabled) => {
+        isEnabled = enabled;
+        if (enabled) createFloatingButton();
+        else {
           promnexaControls?.remove();
           promnexaControls = null;
           promnexaBtn = null;
@@ -880,9 +885,7 @@ export default defineContentScript({
           lastChange = null;
           closeOptimizerCard();
         }
-      }
+      });
     });
-
-    init();
   },
 });

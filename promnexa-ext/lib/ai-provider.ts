@@ -1,3 +1,4 @@
+import { ProviderError, errorForResponse } from "./provider-errors.ts";
 import type {
   AIProviderConfig,
   Category,
@@ -39,13 +40,11 @@ export async function optimizeWithAI(
   timeoutMs = 30000,
 ): Promise<OptimizationResult> {
   if (!config.apiKey || !config.apiKey.trim()) {
-    throw new Error(
-      "API key is missing. Please configure your API key in Settings.",
-    );
+    throw new ProviderError("AUTH");
   }
 
   if (!prompt.trim() || prompt.length > 100000)
-    throw new Error("Prompt must contain 1–100,000 characters.");
+    throw new ProviderError("INPUT");
   signal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
     : AbortSignal.timeout(timeoutMs);
@@ -75,6 +74,7 @@ export async function optimizeWithAI(
         model,
         userMessage,
         signal,
+        mode,
       );
       break;
     case "gemini":
@@ -98,6 +98,9 @@ export async function optimizeWithAI(
     mode,
     improvements: parsed.improvements,
     timestamp: Date.now(),
+    engine: "ai",
+    status:
+      parsed.optimized.trim() === prompt.trim() ? "unchanged" : "improved",
   };
 }
 
@@ -137,17 +140,11 @@ async function callOpenAI(
     signal,
   });
 
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    const msg =
-      errorData.error?.message || `HTTP ${res.status}: ${res.statusText}`;
-    if (res.status === 401) throw new Error("Invalid OpenAI API key.");
-    if (res.status === 429)
-      throw new Error("OpenAI rate limit or quota exceeded.");
-    throw new Error(`OpenAI error: ${msg}`);
-  }
+  if (!res.ok) throw await errorForResponse(res);
 
   const data = await res.json();
+  if (data.choices?.[0]?.finish_reason === "length")
+    throw new ProviderError("TRUNCATED");
   return data.choices?.[0]?.message?.content || "";
 }
 
@@ -156,6 +153,7 @@ async function callAnthropic(
   model: string,
   userMessage: string,
   signal?: AbortSignal,
+  mode: OptimizationMode = "quick",
 ): Promise<string> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -169,22 +167,15 @@ async function callAnthropic(
       model,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],
-      max_tokens: 1500,
+      max_tokens: outputTokenBudget(userMessage, mode),
     }),
     signal,
   });
 
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    const msg =
-      errorData.error?.message || `HTTP ${res.status}: ${res.statusText}`;
-    if (res.status === 401) throw new Error("Invalid Anthropic API key.");
-    if (res.status === 429)
-      throw new Error("Anthropic rate limit or quota exceeded.");
-    throw new Error(`Anthropic error: ${msg}`);
-  }
+  if (!res.ok) throw await errorForResponse(res);
 
   const data = await res.json();
+  if (data.stop_reason === "max_tokens") throw new ProviderError("TRUNCATED");
   const textBlock = data.content?.find(
     (c: { type: string; text?: string }) => c.type === "text",
   );
@@ -222,18 +213,16 @@ async function callGemini(
     signal,
   });
 
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    const msg =
-      errorData.error?.message || `HTTP ${res.status}: ${res.statusText}`;
-    if (res.status === 400 && msg.includes("API_KEY_INVALID"))
-      throw new Error("Invalid Google Gemini API key.");
-    if (res.status === 429) throw new Error("Gemini rate limit exceeded.");
-    throw new Error(`Gemini error: ${msg}`);
-  }
+  if (!res.ok) throw await errorForResponse(res);
 
   const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  if (data.candidates?.[0]?.finishReason === "MAX_TOKENS")
+    throw new ProviderError("TRUNCATED");
+  return (
+    data.candidates?.[0]?.content?.parts
+      ?.map((p: { text?: string }) => p.text || "")
+      .join("") || ""
+  );
 }
 
 export function parseAIResponse(
@@ -268,5 +257,18 @@ export function parseAIResponse(
     // Invalid provider output must trigger the local fallback, not be presented as a prompt.
   }
 
-  throw new Error("Unable to parse optimization result from AI response.");
+  throw new ProviderError("PARSE");
+}
+
+export function outputTokenBudget(
+  input: string,
+  mode: OptimizationMode = "quick",
+): number {
+  return Math.min(
+    16000,
+    Math.max(
+      mode === "deep" || mode === "expert" ? 4096 : 2048,
+      Math.ceil(new TextEncoder().encode(input).length / 2) + 1024,
+    ),
+  );
 }

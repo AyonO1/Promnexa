@@ -203,3 +203,7 @@ See `RELEASE_NOTES_1.1.0.md`, `TESTING_REPORT.md` and `LAUNCH_PLAN.md` in `promn
 
 ## Version 1.1.1: direct in-chat improvement
 Type a draft in a supported AI chat, click **Improve prompt**, review the replacement, then press Send yourself. **Undo** restores the original while protecting newer edits. **Options** retains mode previews and explicit configured-AI use. Alt+Shift+P improves the current draft locally. Reload the extension and refresh open AI-site tabs after updating.
+
+
+## 1.2.0 review candidate
+Review hardening adds session-first keys, explicit Remember choice, opt-in history for new installs, byte budgets, visible context actions, safe provider errors, conservative format-aware rewriting, clarification/diffs, sensitive-info consent/redaction and configurable inline shortcuts. Existing history preferences are retained. Old saved `custom` modes migrate to Quick. Read `REVIEW_RESPONSE.md` and `RELEASE_NOTES_1.2.0.md` inside `promnexa-ext/` for evaluation evidence and migration details. This candidate is not automatically published.

@@ -11,6 +11,7 @@ import {
   exportData,
   importData,
   clearAllData,
+  getStorageUsage,
 } from "../../../lib/storage";
 import { getDefaultModel } from "../../../lib/ai-provider";
 import type { Language } from "../../../lib/i18n";
@@ -47,6 +48,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onThemeChange,
   onLanguageChange,
 }) => {
+  const [usage, setUsage] = React.useState<{
+    bytes: number;
+    budget: number;
+  } | null>(null);
+  React.useEffect(() => {
+    getStorageUsage()
+      .then(setUsage)
+      .catch(() => {});
+  }, []);
   const [settings, setSettings] = React.useState<UserSettings | null>(null);
   const [showAIConfig, setShowAIConfig] = React.useState(false);
   const [showDataSection, setShowDataSection] = React.useState(false);
@@ -63,7 +73,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     if (!settings) return;
     const updated = { ...settings, [key]: value };
     setSettings(updated);
-    await saveSettings({ [key]: value });
+    try {
+      await saveSettings({ [key]: value });
+      setUsage(await getStorageUsage());
+    } catch (error) {
+      addToast((error as Error).message, "error");
+      setSettings(await getSettings());
+    }
   };
 
   const handleThemeChange = (theme: Theme) => {
@@ -95,6 +111,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       const text = await file.text();
       const result = await importData(text);
       addToast(`Imported ${result.saved} saved prompts`, "success");
+      setSettings(await getSettings());
+      setUsage(await getStorageUsage());
     } catch {
       addToast("Invalid import file", "error");
     }
@@ -276,6 +294,27 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </div>
         </div>
 
+        <div className="settings-group">
+          <div className="settings-group__title">Keyboard shortcuts</div>
+          <label className="input-group">
+            Improve directly in chat
+            <select
+              className="select"
+              value={settings.inlineShortcut}
+              onChange={(e) => updateSetting("inlineShortcut", e.target.value)}
+            >
+              {["Alt+Shift+P", "Alt+Shift+O", "Ctrl+Alt+P"].map((key) => (
+                <option key={key}>{key}</option>
+              ))}
+            </select>
+          </label>
+          <p className="section-subtitle">
+            Open popup: Ctrl+Shift+P / Command+Shift+P by default. Change the
+            browser command through your browser's extension shortcut settings
+            (Chrome: chrome://extensions/shortcuts). The inline shortcut is
+            separate.
+          </p>
+        </div>
         {/* AI Provider */}
         <div className="settings-group">
           <div className="settings-group__title">AI Provider (Optional)</div>
@@ -312,9 +351,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               }}
             >
               <div className="input-group">
-                <label className="input-label">Provider</label>
+                <label className="input-label" htmlFor="ai-provider">
+                  Provider
+                </label>
                 <select
                   className="select"
+                  id="ai-provider"
                   value={settings.aiProvider?.provider || ""}
                   onChange={(e) => {
                     const p = e.target.value as
@@ -348,10 +390,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               {settings.aiProvider && (
                 <>
                   <div className="input-group">
-                    <label className="input-label">API Key</label>
+                    <label className="input-label" htmlFor="ai-key">
+                      API Key
+                    </label>
                     <input
                       className="input"
                       type="password"
+                      id="ai-key"
                       placeholder="Enter your API key"
                       value={settings.aiProvider.apiKey}
                       onChange={(e) =>
@@ -363,10 +408,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     />
                   </div>
                   <div className="input-group">
-                    <label className="input-label">Model</label>
+                    <label className="input-label" htmlFor="ai-model">
+                      Model
+                    </label>
                     <input
                       className="input"
                       placeholder="e.g., gpt-4o, claude-3.5-sonnet"
+                      id="ai-model"
                       value={settings.aiProvider.model}
                       onChange={(e) =>
                         updateSetting("aiProvider", {
@@ -376,6 +424,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                       }
                     />
                   </div>
+                  <label className="input-group">
+                    <input
+                      type="checkbox"
+                      checked={settings.aiProvider.rememberApiKey || false}
+                      onChange={(e) =>
+                        updateSetting("aiProvider", {
+                          ...settings.aiProvider!,
+                          rememberApiKey: e.target.checked,
+                        })
+                      }
+                    />{" "}
+                    Remember API key on this device
+                  </label>
                   <div
                     style={{
                       fontSize: "var(--text-xs)",
@@ -393,9 +454,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                         marginTop: "2px",
                       }}
                     />
-                    Your key is stored unencrypted on this device, excluded from
-                    backups, and sent only to your selected provider. API use
-                    may incur provider charges.
+                    Keys are session-only unless you choose Remember. Remembered
+                    keys are unencrypted on this device; backups exclude them.
+                    AI sends your prompt and key to the selected provider and
+                    may incur charges.
                   </div>
                 </>
               )}
@@ -403,6 +465,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           )}
         </div>
 
+        <label className="input-group">
+          Maximum AI input characters
+          <select
+            className="select"
+            value={settings.maxAiInputCharacters}
+            onChange={(e) =>
+              updateSetting("maxAiInputCharacters", Number(e.target.value))
+            }
+          >
+            {[1000, 5000, 10000, 20000, 50000, 100000].map((n) => (
+              <option key={n} value={n}>
+                {n.toLocaleString()}
+              </option>
+            ))}
+          </select>
+        </label>
         {/* Privacy */}
         <div className="settings-group">
           <div className="settings-group__title">Privacy & History</div>
@@ -437,6 +515,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* Data Management */}
         <div className="settings-group">
           <div className="settings-group__title">Data</div>
+          {usage && (
+            <p className="section-subtitle" role="status">
+              Local storage: {(usage.bytes / 1024 / 1024).toFixed(2)} MiB of{" "}
+              {(usage.budget / 1024 / 1024).toFixed(0)} MiB budget. Saved
+              prompts: 4 MiB; rolling history: 2 MiB. Saved items are never
+              silently evicted.
+            </p>
+          )}
 
           <div className="settings-item" onClick={handleExport}>
             <div className="settings-item__left">

@@ -45,11 +45,20 @@ const { chromium } = require(process.env.PROMNEXA_PLAYWRIGHT || "playwright");
           showHistory: true,
         },
       };
+      window.__apiRequests = [];
       const api = {
         runtime: {
           id: "promnexatest",
           getManifest: () => ({ manifest_version: 3 }),
-          sendMessage: async () => ({ error: "Mock provider unavailable" }),
+          sendMessage: async (message) => {
+            if (message.type === "PROMNEXA_CONSUME_CONTEXT")
+              return { action: null };
+            window.__apiRequests.push(structuredClone(message));
+            return {
+              error: "Provider authentication failed. Check your API key.",
+              code: "AUTH",
+            };
+          },
         },
         storage: {
           local: {
@@ -199,6 +208,73 @@ const { chromium } = require(process.env.PROMNEXA_PLAYWRIGHT || "playwright");
     );
     assert.deepEqual(errors, []);
     assert.deepEqual(network, []);
+    await page
+      .getByRole("button", { name: "Optimize Prompt", exact: true })
+      .click();
+    await page.getByText("Optimized Prompt", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Changes", exact: true }).click();
+    assert.ok((await page.locator(".result-text mark").innerText()).length > 0);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page
+      .getByLabel("Improve directly in chat")
+      .selectOption("Alt+Shift+O");
+    await page.getByRole("button", { name: "Optimize", exact: true }).click();
+    await page
+      .locator("textarea")
+      .fill("email user@example.com password=sample-password");
+    await page
+      .getByRole("button", { name: "Redact before AI use", exact: true })
+      .click();
+    assert.ok(
+      !(await page.locator("textarea").inputValue()).includes(
+        "sample-password",
+      ),
+    );
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page
+      .locator(".settings-item")
+      .filter({ hasText: "API Configuration" })
+      .click();
+    await page.getByLabel("Provider", { exact: true }).selectOption("openai");
+    await page.getByLabel("API Key", { exact: true }).fill("demo-test-key");
+    await page.getByRole("button", { name: "Optimize", exact: true }).click();
+    await page.getByRole("button", { name: "openai", exact: true }).waitFor();
+    await page.locator("textarea").fill("Help plan a client meeting");
+    await page
+      .getByRole("button", { name: "Optimize Prompt", exact: true })
+      .click();
+    await page.getByText(/Local fallback/).waitFor();
+    const beforeConsent = await page.evaluate(
+      () => window.__apiRequests.length,
+    );
+    await page
+      .locator("textarea")
+      .fill("Write an email with password=demo-password");
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await page
+      .getByRole("button", { name: "Optimize Prompt", exact: true })
+      .click();
+    await page.getByText(/Local fallback/).waitFor();
+    assert.equal(
+      await page.evaluate(() => window.__apiRequests.length),
+      beforeConsent,
+    );
+    page.once("dialog", (dialog) => dialog.accept());
+    await page
+      .getByRole("button", { name: "Optimize Prompt", exact: true })
+      .click();
+    await page.getByText(/Local fallback/).waitFor();
+    assert.equal(
+      await page.evaluate(() => window.__apiRequests.at(-1).sensitiveConsent),
+      true,
+    );
+    assert.ok(
+      !(
+        await page.evaluate(() => JSON.stringify(window.__apiRequests))
+      ).includes("demo-test-key"),
+    );
+    assert.deepEqual(errors, []);
+    assert.deepEqual(network, []);
     await page.screenshot({ path: ".output/popup-smoke.png", fullPage: true });
     console.log(
       "PASS: lazy template library, editable placeholders, client profiles, workflows, optimize, save, revision, feedback, settings sync, disabled history, intent preservation, zero external requests, no runtime errors.",
@@ -225,10 +301,30 @@ const { chromium } = require(process.env.PROMNEXA_PLAYWRIGHT || "playwright");
       window.browser = {
         runtime: {
           id: "test",
-          sendMessage: async () => ({ error: "Mock API unavailable" }),
+          onMessage: {
+            addListener: (fn) => {
+              window.__settingsListener = fn;
+            },
+          },
+          sendMessage: async (message) =>
+            message.type === "PROMNEXA_PUBLIC_SETTINGS"
+              ? {
+                  settings: {
+                    websiteIntegrations: [],
+                    defaultMode: "quick",
+                    inlineShortcut: "Alt+Shift+P",
+                    language: "en",
+                    maxAiInputCharacters: 20000,
+                  },
+                }
+              : { error: "Mock API unavailable" },
         },
         storage: {
-          local: { get: async () => ({}) },
+          local: {
+            get: async () => {
+              throw new Error("Content scripts must not read local storage.");
+            },
+          },
           onChanged: { addListener: () => {} },
         },
       };
@@ -259,16 +355,25 @@ const { chromium } = require(process.env.PROMNEXA_PLAYWRIGHT || "playwright");
     assert.equal(await editor.inputValue(), original);
     await chat.keyboard.press("Alt+Shift+P");
     assert.equal(await editor.inputValue(), improved);
-    await editor.fill("My newer manual edits");
+    await editor.fill("Help me plan a revised client meeting");
     assert.equal(await chat.locator("#promnexa-undo-btn").isDisabled(), true);
-    assert.equal(await editor.inputValue(), "My newer manual edits");
+    assert.equal(
+      await editor.inputValue(),
+      "Help me plan a revised client meeting",
+    );
     await chat
       .getByRole("button", { name: "Improve prompt", exact: true })
       .focus();
     await chat.keyboard.press("Enter");
-    assert.notEqual(await editor.inputValue(), "My newer manual edits");
+    assert.notEqual(
+      await editor.inputValue(),
+      "Help me plan a revised client meeting",
+    );
     await chat.locator("#promnexa-undo-btn").click();
-    assert.equal(await editor.inputValue(), "My newer manual edits");
+    assert.equal(
+      await editor.inputValue(),
+      "Help me plan a revised client meeting",
+    );
     await editor.fill("");
     await chat
       .getByRole("button", { name: "Improve prompt", exact: true })
@@ -328,7 +433,171 @@ const { chromium } = require(process.env.PROMNEXA_PLAYWRIGHT || "playwright");
     await chat.locator("#promnexa-undo-btn").click();
     assert.notEqual(await editor.innerText(), richOriginal);
     assert.equal(await chat.evaluate(() => window.__sendCount), 0);
+    await chat.evaluate(() =>
+      window.__settingsListener({
+        type: "PROMNEXA_PUBLIC_SETTINGS_CHANGED",
+        settings: {
+          websiteIntegrations: [],
+          defaultMode: "quick",
+          inlineShortcut: "Alt+Shift+O",
+          language: "en",
+          maxAiInputCharacters: 20000,
+        },
+      }),
+    );
+    await editor.fill("Help plan a meeting");
+    await chat.keyboard.press("Alt+Shift+P");
+    assert.equal(await editor.innerText(), "Help plan a meeting");
+    await chat.keyboard.press("Alt+Shift+O");
+    assert.notEqual(await editor.innerText(), "Help plan a meeting");
+    await chat.locator("#promnexa-undo-btn").click();
+    await editor.evaluate((el) => {
+      el.remove();
+      document
+        .querySelector("form")
+        .insertAdjacentHTML(
+          "afterbegin",
+          '<textarea id="first">First draft</textarea><textarea id="second">Second meeting draft</textarea>',
+        );
+    });
+    await chat.locator("#send").focus();
+    await chat
+      .getByRole("button", { name: "Improve prompt", exact: true })
+      .click();
+    assert.equal(await chat.locator("#first").inputValue(), "First draft");
+    assert.equal(
+      await chat.locator("#second").inputValue(),
+      "Second meeting draft",
+    );
+    await chat.locator("#second").focus();
+    await chat
+      .getByRole("button", { name: "Improve prompt", exact: true })
+      .click();
+    assert.equal(await chat.locator("#first").inputValue(), "First draft");
+    assert.notEqual(
+      await chat.locator("#second").inputValue(),
+      "Second meeting draft",
+    );
+    assert.equal(await chat.evaluate(() => window.__sendCount), 0);
     assert.deepEqual(chatErrors, []);
+    // Provider-specific adapters are exercised with simulated DOMs, never live accounts.
+    for (const [host, markup, selector] of [
+      [
+        "chatgpt.com",
+        '<textarea id="prompt-textarea"></textarea>',
+        "#prompt-textarea",
+      ],
+      [
+        "claude.ai",
+        '<div class="ProseMirror" contenteditable="true"></div>',
+        ".ProseMirror",
+      ],
+      [
+        "gemini.google.com",
+        '<rich-textarea><div contenteditable="true"></div></rich-textarea>',
+        'rich-textarea div[contenteditable="true"]',
+      ],
+      [
+        "chat.deepseek.com",
+        '<textarea id="chat-input"></textarea>',
+        "#chat-input",
+      ],
+      [
+        "perplexity.ai",
+        '<div role="textbox" contenteditable="true"></div>',
+        'div[role="textbox"]',
+      ],
+      [
+        "copilot.microsoft.com",
+        '<textarea placeholder="Ask Copilot"></textarea>',
+        "textarea[placeholder]",
+      ],
+      [
+        "grok.com",
+        '<textarea placeholder="Ask anything"></textarea>',
+        "textarea[placeholder]",
+      ],
+    ]) {
+      const adapterPage = await browser.newPage();
+      const adapterErrors = [];
+      adapterPage.on("pageerror", (e) => adapterErrors.push(e.message));
+      await adapterPage.route(`https://${host}/**`, (route) =>
+        route.fulfill({
+          contentType: "text/html",
+          body: `<form>${markup}<textarea id="decoy">Unrelated draft</textarea><button type="submit">Send</button></form>`,
+        }),
+      );
+      await adapterPage.addInitScript(() => {
+        window.__submitted = 0;
+        document.addEventListener(
+          "submit",
+          (e) => {
+            e.preventDefault();
+            window.__submitted++;
+          },
+          true,
+        );
+        window.browser = {
+          runtime: {
+            id: "test",
+            onMessage: { addListener: () => {} },
+            sendMessage: async () => ({
+              settings: {
+                websiteIntegrations: [],
+                defaultMode: "quick",
+                inlineShortcut: "Alt+Shift+P",
+                language: "en",
+                maxAiInputCharacters: 20000,
+              },
+            }),
+          },
+          storage: {
+            local: {
+              get: async () => {
+                throw new Error("Direct storage access");
+              },
+            },
+          },
+        };
+        window.chrome = window.browser;
+      });
+      await adapterPage.goto(`https://${host}/`);
+      await adapterPage.addScriptTag({
+        path: ".output/chrome-mv3/content-scripts/content.js",
+      });
+      const target = adapterPage.locator(selector);
+      const raw = "Help me prepare for a client meeting";
+      await target.fill(raw);
+      await adapterPage
+        .getByRole("button", { name: "Improve prompt", exact: true })
+        .click();
+      assert.notEqual(
+        await target.evaluate((el) =>
+          el instanceof HTMLTextAreaElement ? el.value : el.innerText,
+        ),
+        raw,
+        host,
+      );
+      await adapterPage.locator("#promnexa-undo-btn").click();
+      assert.equal(
+        await target.evaluate((el) =>
+          el instanceof HTMLTextAreaElement ? el.value : el.innerText,
+        ),
+        raw,
+        host,
+      );
+      assert.equal(
+        await adapterPage.locator("#decoy").inputValue(),
+        "Unrelated draft",
+      );
+      assert.equal(await adapterPage.evaluate(() => window.__submitted), 0);
+      assert.deepEqual(adapterErrors, []);
+      await adapterPage.close();
+    }
+    console.log(
+      "PASS: seven provider adapter fixtures preserve unrelated editors, restore drafts and never submit.",
+    );
+
     console.log(
       "PASS: direct improvement, exact Undo, edit/navigation guards, keyboard activation, no automatic submission, empty input, advanced AI fallback, stale previews, rich editor, HTML escaping, rapid close/reopen.",
     );
